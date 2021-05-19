@@ -53,6 +53,7 @@ export interface ValidatedCacheOptions extends CacheOptions {
 }
 
 export interface CacheRequestExtension {
+  requestCache?: any; // TODO: type this
   cacheOptions?: CacheOptions;
   adapter: any;
   status: number;
@@ -61,6 +62,7 @@ export interface CacheRequestExtension {
 }
 
 export interface CacheResponseRequest {
+  requestCache?: any; // TODO: type this
   cacheOptions?: CacheOptions;
   method: string;
 }

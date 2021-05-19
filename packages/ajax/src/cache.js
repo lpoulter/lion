@@ -1,5 +1,5 @@
-/* eslint-disable consistent-return */
 /* eslint-disable no-param-reassign */
+/* eslint-disable consistent-return */
 import './typedef.js';
 
 const SECOND = 1000;
@@ -9,12 +9,11 @@ const DEFAULT_TIME_TO_LIVE = HOUR;
 
 class Cache {
   constructor() {
-    this.expiration = new Date().getTime() + DEFAULT_TIME_TO_LIVE;
     /**
-     * @type {{[url: string]: {expires: number, response: CacheResponse} }}
+     * @type {{ [url: string]: { createdAt: number, response: CacheResponse } }}
      * @private
      */
-    this._cacheObject = {};
+    this._cachedRequests = {};
     /**
      * @type {{ [url: string]: { promise: Promise<void>, resolve: (v?: any) => void } }}
      * @private
@@ -22,78 +21,80 @@ class Cache {
     this._pendingRequests = {};
   }
 
-  /** @param {string} url  */
-  setPendingRequest(url) {
-    /** @type {(v: any) => void} */
-    let resolve = () => {};
-    const promise = new Promise(_resolve => {
-      resolve = _resolve;
-    });
-    this._pendingRequests[url] = { promise, resolve };
+  /**
+   * Creates a promise for a pending request with given key
+   * @param {string} requestKey
+   */
+  setPendingRequest(requestKey) {
+    /** @type {(value: any) => void } */
+    let resolve;
+    if (!this._pendingRequests[requestKey]) {
+      const promise = new Promise(_resolve => {
+        resolve = _resolve;
+      });
+      // @ts-ignore
+      this._pendingRequests[requestKey] = { promise, resolve };
+    }
   }
 
   /**
-   * @param {string} url
+   * Gets the promise for a pending request with given key
+   * @param {string} requestKey
    * @returns {Promise<void> | undefined}
    */
-  getPendingRequest(url) {
-    if (this._pendingRequests[url]) {
-      return this._pendingRequests[url].promise;
-    }
+  getPendingRequest(requestKey) {
+    return this._pendingRequests[requestKey]?.promise;
   }
 
-  /** @param {string} url */
-  resolvePendingRequest(url) {
-    if (this._pendingRequests[url]) {
-      this._pendingRequests[url].resolve();
-      delete this._pendingRequests[url];
-    }
+  /**
+   * Resolves the promise for a pending request with given key
+   * @param {string} requestKey
+   */
+  resolvePendingRequest(requestKey) {
+    this._pendingRequests[requestKey]?.resolve();
+    delete this._pendingRequests[requestKey];
   }
 
   /**
    * Store an item in the cache
-   * @param {string} url key by which the cache is stored
+   * @param {string} requestKey key by which the request is stored
    * @param {Response} response the cached response
    */
-  set(url, response) {
-    this._validateCache();
-    this._cacheObject[url] = {
-      expires: new Date().getTime(),
+  set(requestKey, response) {
+    this._cachedRequests[requestKey] = {
+      createdAt: Date.now(),
       response,
     };
   }
 
   /**
    * Retrieve an item from the cache
-   * @param {string} url key by which the cache is stored
-   * @param {number} timeToLive maximum time to allow cache to live
-   * @returns {CacheResponse | false}
+   * @param {string} requestKey key by which the cache is stored
+   * @param {number} maxAge maximum age of cached request to serve
+   * @returns {CacheResponse | undefined}
    */
-  get(url, timeToLive) {
-    this._validateCache();
-
-    const cacheResult = this._cacheObject[url];
+  get(requestKey, maxAge) {
+    const cacheResult = this._cachedRequests[requestKey];
     if (!cacheResult) {
-      return false;
+      return;
     }
-    const cacheAge = new Date().getTime() - cacheResult.expires;
 
-    if (timeToLive !== null && cacheAge > timeToLive) {
-      return false;
+    const cacheAge = Date.now() - cacheResult.createdAt;
+    if (maxAge !== null && cacheAge > maxAge) {
+      return;
     }
+
     return cacheResult.response;
   }
 
   /**
-   * Delete all items from the cache that contain the given url
-   * @param {string} url key by which the cache is stored
+   * Delete all items from the cache with the given key
+   * @param {string} requestKey key by which the request is stored
    */
-  delete(url) {
-    this._validateCache();
-
-    Object.keys(this._cacheObject).forEach(key => {
-      if (key.includes(url)) {
-        delete this._cacheObject[key];
+  delete(requestKey) {
+    Object.keys(this._cachedRequests).forEach(key => {
+      if (key === requestKey) {
+        delete this._cachedRequests[key];
         this.resolvePendingRequest(key);
       }
     });
@@ -104,32 +105,25 @@ class Cache {
    * @param {RegExp} regex an regular expression to match cache entries
    */
   deleteMatched(regex) {
-    this._validateCache();
-
-    Object.keys(this._cacheObject).forEach(key => {
-      const notMatch = !new RegExp(regex).test(key);
-      if (notMatch) return;
-      delete this._cacheObject[key];
-      this.resolvePendingRequest(key);
+    Object.keys(this._cachedRequests).forEach(requestKey => {
+      if (new RegExp(regex).test(requestKey)) {
+        delete this._cachedRequests[requestKey];
+        this.resolvePendingRequest(requestKey);
+      }
     });
   }
-
-  /**
-   * Validate cache on each call to the Cache
-   * When the expiration date has passed, the _cacheObject will be replaced by an
-   * empty object
-   * @protected
-   */
-  _validateCache() {
-    if (new Date().getTime() > this.expiration) {
-      this._cacheObject = {};
-      return false;
-    }
-    return true;
-  }
 }
+/**
+ * The current cache
+ * @type {Cache}
+ */
+let cache;
 
-let caches = {};
+/**
+ * The identifier for the current cache
+ * @type {string | undefined}
+ */
+let currentCacheIdentifier;
 
 /**
  * Serialize search parameters into url query string parameters.
@@ -142,19 +136,16 @@ export const stringifySearchParams = (params = {}) =>
 
 /**
  * Returns the active cache instance for the current session
- * If 'cacheIdentifier' changes the cache is reset, we avoid situation of accessing old cache
- * and proactively clean it
- * @param {string} cacheIdentifier usually the refreshToken of the owner of the cache
+ * If 'cacheIdentifier' is undefined or different from the current cacheIdentifier, the cache is reset
+ * @param {string} cacheIdentifier some identifier that is tied to the current session
+ * @returns {Cache} The cache for this identifier
  */
 export const getCache = cacheIdentifier => {
-  if (caches[cacheIdentifier]?._validateCache()) {
-    return caches[cacheIdentifier];
+  if (cacheIdentifier == null || cacheIdentifier !== currentCacheIdentifier) {
+    currentCacheIdentifier = cacheIdentifier;
+    cache = new Cache();
   }
-  // invalidate old caches
-  caches = {};
-  // create new cache
-  caches[cacheIdentifier] = new Cache();
-  return caches[cacheIdentifier];
+  return cache;
 };
 
 /**
@@ -182,7 +173,7 @@ export const validateCacheOptions = ({
   if (timeToLive === undefined) {
     timeToLive = DEFAULT_TIME_TO_LIVE;
   }
-  if (Number.isNaN(parseInt(String(timeToLive), 10))) {
+  if (typeof timeToLive === 'number' && !Number.isNaN(timeToLive)) {
     throw new Error('Property `timeToLive` must be of type `number`');
   }
   // validate 'invalidateUrls', must be an `Array` or `falsy`

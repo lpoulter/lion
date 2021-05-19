@@ -24,49 +24,56 @@ const createCacheRequestInterceptor = (getCacheIdentifier, globalCacheOptions) =
       return cacheRequest;
     }
 
-    const cacheId = cacheOptions.requestIdentificationFn(cacheRequest, stringifySearchParams);
+    const requestId = cacheOptions.requestIdentificationFn(cacheRequest, stringifySearchParams);
     // cacheIdentifier is used to bind the cache to the current session
-    const currentCache = getCache(getCacheIdentifier());
+    const cacheIdentifier = getCacheIdentifier();
+    const cache = getCache(cacheIdentifier);
     const { method } = cacheRequest;
 
     // don't use cache if the request method is not part of the configs methods
     if (!cacheOptions.methods.includes(method.toLowerCase())) {
-      // If it's NOT one of the config.methods, invalidate caches
-      currentCache.delete(cacheId);
-      // also invalidate caches matching to cacheOptions
-      if (cacheOptions.invalidateUrls) {
-        cacheOptions.invalidateUrls.forEach(
-          /** @type {string} */ invalidateUrl => {
-            currentCache.delete(invalidateUrl);
-          },
-        );
-      }
-      // also invalidate caches matching to invalidateUrlsRegex
-      if (cacheOptions.invalidateUrlsRegex) {
-        currentCache.deleteMatched(cacheOptions.invalidateUrlsRegex);
-      }
+      // NOTE: I don't understand the point of this section. Why suddenly start deleting (existing) caches
+      //       when someone tries to cache a request with another method? I think this can be removed.
+      //
+      // // If it's NOT one of the config.methods, invalidate caches
+      // cache.delete(requestId);
+      // // also invalidate caches matching to cacheOptions
+      // if (cacheOptions.invalidateUrls) {
+      //   cacheOptions.invalidateUrls.forEach(
+      //     /** @type {string} */ invalidateUrl => {
+      //       cache.delete(invalidateUrl);
+      //     },
+      //   );
+      // }
+      // // also invalidate caches matching to invalidateUrlsRegex
+      // if (cacheOptions.invalidateUrlsRegex) {
+      //   cache.deleteMatched(cacheOptions.invalidateUrlsRegex);
+      // }
 
       return cacheRequest;
     }
 
-    const pendingRequest = currentCache.getPendingRequest(cacheId);
+    const pendingRequest = cache.getPendingRequest(requestId);
     if (pendingRequest) {
       // there is another concurrent request, wait for it to finish
       await pendingRequest;
     }
 
-    const cacheResponse = currentCache.get(cacheId, cacheOptions.timeToLive);
+    const cacheResponse = cache.get(requestId, cacheOptions.timeToLive);
     if (cacheResponse) {
       cacheRequest.cacheOptions = cacheRequest.cacheOptions ?? { useCache: false };
-      const response = /** @type {CacheResponse} */ cacheResponse.clone();
+      /** @type {CacheResponse} */
+      const response = cacheResponse.clone();
       response.request = cacheRequest;
       response.fromCache = true;
       return response;
     }
 
-    // we do want to use caching for this requesting, but it's not already cached
-    // mark this as a pending request, so that concurrent requests can reuse it from the cache
-    currentCache.setPendingRequest(cacheId);
+    // We want to cache this request, and it's not already cached
+    // Mark this as a pending request, so that concurrent requests can use the response from this request
+    cache.setPendingRequest(requestId);
+
+    cacheRequest.requestCache = cache;
 
     return cacheRequest;
   };
@@ -74,23 +81,22 @@ const createCacheRequestInterceptor = (getCacheIdentifier, globalCacheOptions) =
 
 /**
  * Response interceptor to cache relevant requests
- * @param {function(): string} getCacheIdentifier used to invalidate cache if identifier is changed
  * @param {CacheOptions} globalCacheOptions
  * @returns {ResponseInterceptor}
  */
-const createCacheResponseInterceptor = (getCacheIdentifier, globalCacheOptions) => {
+const createCacheResponseInterceptor = globalCacheOptions => {
   const validatedInitialCacheOptions = validateCacheOptions(globalCacheOptions);
 
   /**
    * Axios response https://github.com/axios/axios#response-schema
    */
   return /** @param {CacheResponse} cacheResponse */ async cacheResponse => {
-    if (!getCacheIdentifier()) {
-      throw new Error(`getCacheIdentifier returns falsy`);
-    }
-
     if (!cacheResponse.request) {
-      throw new Error('Missing request in response.');
+      throw new Error('Missing request in response');
+    }
+    const cache = cacheResponse.request.requestCache;
+    if (!cache) {
+      return cacheResponse;
     }
 
     const cacheOptions = validateCacheOptions({
@@ -99,11 +105,10 @@ const createCacheResponseInterceptor = (getCacheIdentifier, globalCacheOptions) 
     });
 
     // string that identifies cache entry
-    const cacheId = cacheOptions.requestIdentificationFn(
+    const requestId = cacheOptions.requestIdentificationFn(
       cacheResponse.request,
       stringifySearchParams,
     );
-    const currentCache = getCache(getCacheIdentifier());
     const isAlreadyFromCache = !!cacheResponse.fromCache;
     // caching all responses with not default `timeToLive`
     const isCacheActive = cacheOptions.timeToLive > 0;
@@ -113,10 +118,10 @@ const createCacheResponseInterceptor = (getCacheIdentifier, globalCacheOptions) 
     // if the request is one of the options.methods; store response in cache
     if (!isAlreadyFromCache && isCacheActive && isMethodSupported) {
       // store the response data in the cache and mark request as resolved
-      currentCache.set(cacheId, cacheResponse.clone());
+      cache.set(requestId, cacheResponse.clone());
+      cache.resolvePendingRequest(requestId);
     }
 
-    currentCache.resolvePendingRequest(cacheId);
     return cacheResponse;
   };
 };
@@ -129,9 +134,6 @@ const createCacheResponseInterceptor = (getCacheIdentifier, globalCacheOptions) 
  */
 export const createCacheInterceptors = (getCacheIdentifier, globalCacheOptions) => {
   const requestInterceptor = createCacheRequestInterceptor(getCacheIdentifier, globalCacheOptions);
-  const responseInterceptor = createCacheResponseInterceptor(
-    getCacheIdentifier,
-    globalCacheOptions,
-  );
+  const responseInterceptor = createCacheResponseInterceptor(globalCacheOptions);
   return [requestInterceptor, responseInterceptor];
 };
