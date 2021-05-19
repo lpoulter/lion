@@ -186,7 +186,7 @@ describe('interceptors', () => {
             methods: ['get', 'post'],
           });
           removeCacheInterceptors(ajax, indexes);
-        }).to.throw(/not yet supported/);
+        }).to.throw(/Cache can only be utilized with `GET` method/);
       });
 
       it('throws error when requestIdentificationFn is not a function', () => {
@@ -199,7 +199,7 @@ describe('interceptors', () => {
             requestIdentificationFn: 'not a function',
           });
           removeCacheInterceptors(ajax, indexes);
-        }).to.throw(/Property `requestIdentificationFn` must be of type `function`/);
+        }).to.throw(/Property `requestIdentificationFn` must be a `function`/);
       });
     });
 

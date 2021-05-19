@@ -36,12 +36,12 @@ const createCacheRequestInterceptor = (getCacheIdentifier, globalCacheOptions) =
       //       when someone tries to cache a request with another method? I think this can be removed.
       //
       // // If it's NOT one of the config.methods, invalidate caches
-      // cache.delete(requestId);
+      // cache.deleteMatched(requestId);
       // // also invalidate caches matching to cacheOptions
       // if (cacheOptions.invalidateUrls) {
       //   cacheOptions.invalidateUrls.forEach(
       //     /** @type {string} */ invalidateUrl => {
-      //       cache.delete(invalidateUrl);
+      //       cache.deleteMatched(invalidateUrl);
       //     },
       //   );
       // }

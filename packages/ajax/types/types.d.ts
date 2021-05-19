@@ -29,7 +29,7 @@ export type Params = { [key: string]: any };
 
 export type RequestIdentificationFn = (
   request: Partial<CacheRequest>,
-  stringifySearchParams: (params: Params) => string,
+  serializeSearchParams: (params: Params) => string,
 ) => string;
 
 export interface CacheOptions {
