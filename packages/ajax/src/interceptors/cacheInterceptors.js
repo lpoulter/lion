@@ -1,54 +1,57 @@
 /* eslint-disable no-param-reassign */
 import '../typedef.js';
-import { validateCacheOptions, stringifySearchParams, getCache } from '../cache.js';
+import { sanitiseCacheOptions, stringifySearchParams, getCache } from '../cache.js';
 
 /**
  * Request interceptor to return relevant cached requests
- * @param {function(): string} getCacheIdentifier used to invalidate cache if identifier is changed
+ * @param {function(): string} getCacheId used to invalidate cache if identifier is changed
  * @param {CacheOptions} globalCacheOptions
  * @returns {RequestInterceptor}
  */
-const createCacheRequestInterceptor = (getCacheIdentifier, globalCacheOptions) => {
-  const validatedInitialCacheOptions = validateCacheOptions(globalCacheOptions);
+const createCacheRequestInterceptor = (getCacheId, globalCacheOptions) => {
+  const validatedInitialCacheOptions = sanitiseCacheOptions(globalCacheOptions);
 
   return /** @param {CacheRequest} cacheRequest */ async cacheRequest => {
-    const cacheOptions = validateCacheOptions({
+    const cacheOptions = sanitiseCacheOptions({
       ...validatedInitialCacheOptions,
       ...cacheRequest.cacheOptions,
     });
 
     cacheRequest.cacheOptions = cacheOptions;
 
-    // don't use cache if 'useCache' === false
     if (!cacheOptions.useCache) {
-      return cacheRequest;
+      return cacheRequest; // bypass cache
     }
 
-    const requestId = cacheOptions.requestIdentificationFn(cacheRequest, stringifySearchParams);
-    // cacheIdentifier is used to bind the cache to the current session
-    const cacheIdentifier = getCacheIdentifier();
-    const cache = getCache(cacheIdentifier);
+    const requestId = cacheOptions.getRequestId(cacheRequest, stringifySearchParams);
+    const cacheId = getCacheId(); // cacheId is used to bind the cache to the current session
+    const cache = getCache(cacheId);
     const { method } = cacheRequest;
 
     // don't use cache if the request method is not part of the configs methods
     if (!cacheOptions.methods.includes(method.toLowerCase())) {
-      // NOTE: I don't understand the point of this section. Why suddenly start deleting (existing) caches
-      //       when someone tries to cache a request with another method? I think this can be removed.
-      //
-      // // If it's NOT one of the config.methods, invalidate caches
-      // cache.deleteMatched(requestId);
-      // // also invalidate caches matching to cacheOptions
-      // if (cacheOptions.invalidateUrls) {
-      //   cacheOptions.invalidateUrls.forEach(
-      //     /** @type {string} */ invalidateUrl => {
-      //       cache.deleteMatched(invalidateUrl);
-      //     },
-      //   );
-      // }
-      // // also invalidate caches matching to invalidateUrlsRegex
-      // if (cacheOptions.invalidateUrlsRegex) {
-      //   cache.deleteMatched(cacheOptions.invalidateUrlsRegex);
-      // }
+      // There are two kinds of invalidate rules:
+      // invalidateUrls (array of URL like strings)
+      // invalidateUrlsRegex (RegExp)
+      // If a non-GET method is fired, by default it only invalidates its own endpoint.
+      // Invalidating /api/users cache by doing a PATCH, will not invalidate /api/accounts cache.
+      // However, in the case of users and accounts, they may be very interconnected,
+      // so perhaps you do want to invalidate /api/accounts when invalidating /api/users.
+
+      // If it's NOT one of the config.methods, invalidate caches
+      cache.deleteMatched(requestId);
+      // also invalidate caches matching to cacheOptions
+      if (cacheOptions.invalidateUrls) {
+        cacheOptions.invalidateUrls.forEach(
+          /** @type {string} */ invalidateUrl => {
+            cache.deleteMatched(invalidateUrl);
+          },
+        );
+      }
+      // also invalidate caches matching to invalidateUrlsRegex
+      if (cacheOptions.invalidateUrlsRegex) {
+        cache.deleteMatched(cacheOptions.invalidateUrlsRegex);
+      }
 
       return cacheRequest;
     }
@@ -85,7 +88,7 @@ const createCacheRequestInterceptor = (getCacheIdentifier, globalCacheOptions) =
  * @returns {ResponseInterceptor}
  */
 const createCacheResponseInterceptor = globalCacheOptions => {
-  const validatedInitialCacheOptions = validateCacheOptions(globalCacheOptions);
+  const validatedInitialCacheOptions = sanitiseCacheOptions(globalCacheOptions);
 
   /**
    * Axios response https://github.com/axios/axios#response-schema
@@ -99,16 +102,13 @@ const createCacheResponseInterceptor = globalCacheOptions => {
       return cacheResponse;
     }
 
-    const cacheOptions = validateCacheOptions({
+    const cacheOptions = sanitiseCacheOptions({
       ...validatedInitialCacheOptions,
       ...cacheResponse.request?.cacheOptions,
     });
 
     // string that identifies cache entry
-    const requestId = cacheOptions.requestIdentificationFn(
-      cacheResponse.request,
-      stringifySearchParams,
-    );
+    const requestId = cacheOptions.getRequestId(cacheResponse.request, stringifySearchParams);
     const isAlreadyFromCache = !!cacheResponse.fromCache;
     // caching all responses with not default `timeToLive`
     const isCacheActive = cacheOptions.timeToLive > 0;
@@ -128,12 +128,12 @@ const createCacheResponseInterceptor = globalCacheOptions => {
 
 /**
  * Response interceptor to cache relevant requests
- * @param {function(): string} getCacheIdentifier used to invalidate cache if identifier is changed
+ * @param {function(): string} getCacheId used to invalidate cache if identifier is changed
  * @param {CacheOptions} globalCacheOptions
  * @returns [{RequestInterceptor}, {ResponseInterceptor}]
  */
-export const createCacheInterceptors = (getCacheIdentifier, globalCacheOptions) => {
-  const requestInterceptor = createCacheRequestInterceptor(getCacheIdentifier, globalCacheOptions);
+export const createCacheInterceptors = (getCacheId, globalCacheOptions) => {
+  const requestInterceptor = createCacheRequestInterceptor(getCacheId, globalCacheOptions);
   const responseInterceptor = createCacheResponseInterceptor(globalCacheOptions);
   return [requestInterceptor, responseInterceptor];
 };

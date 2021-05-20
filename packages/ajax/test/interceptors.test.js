@@ -189,17 +189,17 @@ describe('interceptors', () => {
         }).to.throw(/Cache can only be utilized with `GET` method/);
       });
 
-      it('throws error when requestIdentificationFn is not a function', () => {
+      it('throws error when getRequestId is not a function', () => {
         newCacheId();
 
         expect(() => {
           const indexes = addCacheInterceptors(ajax, {
             useCache: true,
             // @ts-ignore needed for test
-            requestIdentificationFn: 'not a function',
+            getRequestId: 'not a function',
           });
           removeCacheInterceptors(ajax, indexes);
-        }).to.throw(/Property `requestIdentificationFn` must be a `function`/);
+        }).to.throw(/Property `getRequestId` must be a `function`/);
       });
     });
 
@@ -312,7 +312,7 @@ describe('interceptors', () => {
         removeCacheInterceptors(ajax, indexes);
       });
 
-      it('uses custom requestIdentificationFn when passed', async () => {
+      it('uses custom getRequestId when passed', async () => {
         newCacheId();
 
         const customRequestIdFn = /** @type {RequestIdentificationFn} */ (request, serializer) => {
@@ -327,7 +327,7 @@ describe('interceptors', () => {
         const reqIdSpy = spy(customRequestIdFn);
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          requestIdentificationFn: reqIdSpy,
+          getRequestId: reqIdSpy,
         });
 
         await ajax.fetch('/test', { headers: { 'x-id': '1' } });

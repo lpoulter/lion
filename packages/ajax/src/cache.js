@@ -3,12 +3,12 @@ import './typedef.js';
 class Cache {
   constructor() {
     /**
-     * @type {{ [requestKey: string]: { createdAt: number, response: CacheResponse } }}
+     * @type {{ [requestId: string]: { createdAt: number, response: CacheResponse } }}
      * @private
      */
     this._cachedRequests = {};
     /**
-     * @type {{ [requestKey: string]: { promise: Promise<void>, resolve: (value?: any) => void } }}
+     * @type {{ [requestId: string]: { promise: Promise<void>, resolve: (value?: any) => void } }}
      * @private
      */
     this._pendingRequests = {};
@@ -16,10 +16,10 @@ class Cache {
 
   /**
    * Creates a promise for a pending request with given key
-   * @param {string} requestKey
+   * @param {string} requestId
    */
-  setPendingRequest(requestKey) {
-    if (this._pendingRequests[requestKey]) {
+  setPendingRequest(requestId) {
+    if (this._pendingRequests[requestId]) {
       return;
     }
     /** @type {(value?: any) => void } */
@@ -28,34 +28,34 @@ class Cache {
       resolve = _resolve;
     });
     // @ts-ignore
-    this._pendingRequests[requestKey] = { promise, resolve };
+    this._pendingRequests[requestId] = { promise, resolve };
   }
 
   /**
    * Gets the promise for a pending request with given key
-   * @param {string} requestKey
+   * @param {string} requestId
    * @returns {Promise<void> | undefined}
    */
-  getPendingRequest(requestKey) {
-    return this._pendingRequests[requestKey]?.promise;
+  getPendingRequest(requestId) {
+    return this._pendingRequests[requestId]?.promise;
   }
 
   /**
    * Resolves the promise for a pending request with given key
-   * @param {string} requestKey
+   * @param {string} requestId
    */
-  resolvePendingRequest(requestKey) {
-    this._pendingRequests[requestKey]?.resolve();
-    delete this._pendingRequests[requestKey];
+  resolvePendingRequest(requestId) {
+    this._pendingRequests[requestId]?.resolve();
+    delete this._pendingRequests[requestId];
   }
 
   /**
    * Store an item in the cache
-   * @param {string} requestKey key by which the request is stored
+   * @param {string} requestId key by which the request is stored
    * @param {Response} response the cached response
    */
-  set(requestKey, response) {
-    this._cachedRequests[requestKey] = {
+  set(requestId, response) {
+    this._cachedRequests[requestId] = {
       createdAt: Date.now(),
       response,
     };
@@ -63,12 +63,12 @@ class Cache {
 
   /**
    * Retrieve an item from the cache
-   * @param {string} requestKey key by which the cache is stored
+   * @param {string} requestId key by which the cache is stored
    * @param {number} maxCacheAge maximum age of a cached request to serve from cache
    * @returns {CacheResponse | undefined}
    */
-  get(requestKey, maxCacheAge) {
-    const cachedRequest = this._cachedRequests[requestKey];
+  get(requestId, maxCacheAge) {
+    const cachedRequest = this._cachedRequests[requestId];
     if (!cachedRequest) {
       return;
     }
@@ -84,10 +84,10 @@ class Cache {
    * @param {RegExp | string } regex an regular expression to match cache entries
    */
   deleteMatched(regex) {
-    Object.keys(this._cachedRequests).forEach(requestKey => {
-      if (new RegExp(regex).test(requestKey)) {
-        delete this._cachedRequests[requestKey];
-        this.resolvePendingRequest(requestKey);
+    Object.keys(this._cachedRequests).forEach(requestId => {
+      if (new RegExp(regex).test(requestId)) {
+        delete this._cachedRequests[requestId];
+        this.resolvePendingRequest(requestId);
       }
     });
   }
@@ -97,13 +97,28 @@ class Cache {
  * The current cache
  * @type {Cache}
  */
-let cache;
+let currentCache;
 
 /**
- * The identifier for the current cache
+ * The id for the current cache
  * @type {string | undefined}
  */
-let currentCacheIdentifier;
+let currentCacheId;
+
+/**
+ * Returns the active `Cache` instance for the current session.
+ * There can be only 1 active session at all times.
+ * @param {string} cacheId The cache id that is tied to the current session
+ * @returns {Cache} The cache corresponding to given cache id
+ */
+export const getCache = cacheId => {
+  const shouldResetCache = !cacheId || cacheId !== currentCacheId;
+  if (shouldResetCache) {
+    currentCacheId = cacheId;
+    currentCache = new Cache();
+  }
+  return currentCache;
+};
 
 /**
  * Stringify URL search params
@@ -114,17 +129,14 @@ export const stringifySearchParams = (params = {}) =>
   typeof params === 'object' && params !== null ? new URLSearchParams(params).toString() : '';
 
 /**
- * Returns the active cache instance for the current session
- * @param {string} cacheIdentifier The identifier that is tied to the current session
- * @returns {Cache} The cache corresponding to given cache identifier
+ * Returns request key string, which uniquely identifies a Request
+ * @param {Partial<CacheRequest>} request Request object
+ * @param {function} serializeSearchParams Function to serialize URL search params
+ * @returns {string} requestId to uniquely identify a request
  */
-export const getCache = cacheIdentifier => {
-  const shouldResetCache = !cacheIdentifier || cacheIdentifier !== currentCacheIdentifier;
-  if (shouldResetCache) {
-    currentCacheIdentifier = cacheIdentifier;
-    cache = new Cache();
-  }
-  return cache;
+const DEFAULT_GET_REQUEST_ID = ({ url = '', params }, serializeSearchParams) => {
+  const serializedParams = serializeSearchParams(params);
+  return serializedParams ? `${url}?${serializedParams}` : url;
 };
 
 /**
@@ -133,26 +145,14 @@ export const getCache = cacheIdentifier => {
 const DEFAULT_TIME_TO_LIVE = 1000 * 60 * 60;
 
 /**
- * Returns requestKey, which uniquely identifies a Request
- * @param {Partial<CacheRequest>} request Request object
- * @param {function} serializeSearchParams Function to serialize URL search params
- * @returns {string} requestKey to uniquely identify a request
- */
-const DEFAULT_REQUEST_IDENTIFICATION_FN = ({ url, params }, serializeSearchParams) => {
-  const serializedParams = serializeSearchParams(params);
-  const requestKey = serializedParams ? `${url}?${serializedParams}` : url;
-  return String(requestKey);
-};
-
-/**
  * @param {CacheOptions} options Options to match cache
  * @returns {ValidatedCacheOptions}
  */
-export const validateCacheOptions = ({
+export const sanitiseCacheOptions = ({
   useCache = false,
   methods = ['get'],
   timeToLive = DEFAULT_TIME_TO_LIVE,
-  requestIdentificationFn = DEFAULT_REQUEST_IDENTIFICATION_FN,
+  getRequestId = DEFAULT_GET_REQUEST_ID,
   invalidateUrls,
   invalidateUrlsRegex,
 }) => {
@@ -171,8 +171,8 @@ export const validateCacheOptions = ({
   if (invalidateUrlsRegex && !(invalidateUrlsRegex instanceof RegExp)) {
     throw new Error('Property `invalidateUrlsRegex` must be a `RegExp` or `falsy`');
   }
-  if (requestIdentificationFn && typeof requestIdentificationFn !== 'function') {
-    throw new Error('Property `requestIdentificationFn` must be a `function`');
+  if (getRequestId && typeof getRequestId !== 'function') {
+    throw new Error('Property `getRequestId` must be a `function`');
   }
 
   return {
@@ -181,6 +181,6 @@ export const validateCacheOptions = ({
     timeToLive,
     invalidateUrls,
     invalidateUrlsRegex,
-    requestIdentificationFn,
+    getRequestId,
   };
 };

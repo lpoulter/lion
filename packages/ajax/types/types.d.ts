@@ -38,7 +38,7 @@ export interface CacheOptions {
   timeToLive?: number;
   invalidateUrls?: string[];
   invalidateUrlsRegex?: RegExp;
-  requestIdentificationFn?: RequestIdentificationFn;
+  getRequestId?: RequestIdentificationFn;
 }
 
 export interface CacheOptionsWithIdentifier extends CacheOptions {
@@ -49,7 +49,7 @@ export interface ValidatedCacheOptions extends CacheOptions {
   useCache: boolean;
   methods: string[];
   timeToLive: number;
-  requestIdentificationFn: RequestIdentificationFn;
+  getRequestId: RequestIdentificationFn;
 }
 
 export interface CacheRequestExtension {
