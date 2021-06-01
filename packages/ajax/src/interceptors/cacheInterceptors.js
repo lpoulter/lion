@@ -24,7 +24,7 @@ const createCacheRequestInterceptor = (
     return cacheRequest; // bypass cache
   }
 
-  const requestId = cacheOptions.getRequestId(cacheRequest);
+  const requestId = cacheOptions.requestIdFunction(cacheRequest);
   const cacheId = getCacheId(); // cacheId is used to bind the cache to the current session
   const cache = getCacheById(cacheId);
   const { method } = cacheRequest;
@@ -107,7 +107,7 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
   validateCacheOptions(cacheOptions);
 
   // string that identifies cache entry
-  const requestId = cacheOptions.getRequestId(cacheResponse.request);
+  const requestId = cacheOptions.requestIdFunction(cacheResponse.request);
   const isAlreadyFromCache = !!cacheResponse.fromCache;
   // caching all responses with not default `timeToLive`
   const isCacheActive = cacheOptions.timeToLive > 0;

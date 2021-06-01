@@ -20,8 +20,10 @@ let currentCacheId;
  * @returns {Cache} The cache corresponding to given cache id
  */
 export const getCacheById = cacheId => {
-  const shouldResetCache = !cacheId || cacheId !== currentCacheId;
-  if (shouldResetCache) {
+  if (!cacheId) {
+    throw new Error('Invalid cache identifier');
+  }
+  if (cacheId !== currentCacheId) {
     currentCacheId = cacheId;
     currentCache = new Cache();
   }
@@ -63,14 +65,14 @@ export const sanitiseCacheOptions = ({
   useCache = false,
   methods = ['get'],
   timeToLive = DEFAULT_TIME_TO_LIVE,
-  getRequestId = DEFAULT_GET_REQUEST_ID,
+  requestIdFunction = DEFAULT_GET_REQUEST_ID,
   invalidateUrls,
   invalidateUrlsRegex,
 }) => ({
   useCache,
   methods,
   timeToLive,
-  getRequestId,
+  requestIdFunction,
   invalidateUrls,
   invalidateUrlsRegex,
 });
@@ -82,7 +84,7 @@ export const validateCacheOptions = ({
   useCache,
   methods,
   timeToLive,
-  getRequestId,
+  requestIdFunction,
   invalidateUrls,
   invalidateUrlsRegex,
 }) => {
@@ -101,7 +103,7 @@ export const validateCacheOptions = ({
   if (invalidateUrlsRegex !== undefined && !(invalidateUrlsRegex instanceof RegExp)) {
     throw new Error('Property `invalidateUrlsRegex` must be a `RegExp` or `falsy`');
   }
-  if (getRequestId !== undefined && typeof getRequestId !== 'function') {
+  if (requestIdFunction !== undefined && typeof requestIdFunction !== 'function') {
     throw new Error('Property `getRequestId` must be a `function`');
   }
 };
