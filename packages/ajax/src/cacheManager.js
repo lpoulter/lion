@@ -3,16 +3,16 @@ import Cache from './Cache.js';
 import PendingRequestStore from './PendingRequestStore.js';
 
 /**
- * The current cache
- * @type {Cache}
- */
-let currentCache;
-
-/**
- * The id for the current cache
+ * The id for the cache session
  * @type {string | undefined}
  */
-let currentCacheId;
+let cacheSessionId;
+
+/**
+ * The ajax cache
+ * @type {Cache}
+ */
+export const ajaxCache = new Cache();
 
 /**
  * The pending request store
@@ -21,21 +21,20 @@ let currentCacheId;
 export const pendingRequestStore = new PendingRequestStore();
 
 /**
- * Returns the active `Cache` instance for the current session.
+ * Resets the cache session when the cacheId changes.
+ *
  * There can be only 1 active session at all times.
  * @param {string} cacheId The cache id that is tied to the current session
- * @returns {Cache} The cache corresponding to given cache id
  */
-export const getCacheById = cacheId => {
+export const resetCacheSession = cacheId => {
   if (!cacheId) {
     throw new Error('Invalid cache identifier');
   }
-  if (cacheId !== currentCacheId) {
-    currentCacheId = cacheId;
-    currentCache = new Cache();
-    pendingRequestStore.clear();
+  if (cacheId !== cacheSessionId) {
+    cacheSessionId = cacheId;
+    ajaxCache.reset();
+    pendingRequestStore.reset();
   }
-  return currentCache;
 };
 
 /**
@@ -131,7 +130,7 @@ export const invalidateMatchingCache = ({ requestId, invalidateUrls, invalidateU
    * @param {RegExp | string } regex an regular expression to match
    */
   const invalidateMatching = regex => {
-    currentCache.delete(regex);
+    ajaxCache.delete(regex);
     pendingRequestStore.resolve(regex);
   };
 

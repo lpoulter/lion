@@ -50,4 +50,8 @@ export default class Cache {
       }
     });
   }
+
+  reset() {
+    this._cachedRequests = {};
+  }
 }

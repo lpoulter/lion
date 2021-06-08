@@ -48,7 +48,7 @@ export default class PendingRequestStore {
     });
   }
 
-  clear() {
+  reset() {
     this._pendingRequests = {};
   }
 }
