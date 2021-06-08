@@ -1,6 +1,12 @@
 /* eslint-disable no-param-reassign */
 import '../typedef.js';
-import { getCacheById, sanitiseCacheOptions, validateCacheOptions } from '../cacheManager.js';
+import {
+  getCacheById,
+  extendCacheOptions,
+  validateCacheOptions,
+  invalidateMatchingCache,
+  pendingRequestStore,
+} from '../cacheManager.js';
 
 /**
  * Request interceptor to return relevant cached requests
@@ -11,57 +17,34 @@ import { getCacheById, sanitiseCacheOptions, validateCacheOptions } from '../cac
 const createCacheRequestInterceptor = (
   getCacheId,
   globalCacheOptions,
-) => /** @param {CacheRequest} cacheRequest */ async cacheRequest => {
-  const cacheOptions = sanitiseCacheOptions({
-    ...globalCacheOptions,
-    ...cacheRequest.cacheOptions,
-  });
-  validateCacheOptions(cacheOptions);
+) => /** @param {CacheRequest} request */ async request => {
+  validateCacheOptions(request.cacheOptions);
 
-  cacheRequest.cacheOptions = cacheOptions;
+  const cacheOptions = extendCacheOptions({
+    ...globalCacheOptions,
+    ...request.cacheOptions,
+  });
+
+  request.cacheOptions = cacheOptions;
 
   if (!cacheOptions.useCache) {
-    return cacheRequest; // bypass cache
+    return request;
   }
 
-  const requestId = cacheOptions.requestIdFunction(cacheRequest);
+  const requestId = cacheOptions.requestIdFunction(request);
   const cacheId = getCacheId(); // cacheId is used to bind the cache to the current session
   const cache = getCacheById(cacheId);
-  const { method } = cacheRequest;
+  const { method } = request;
   const isMethodSupported = cacheOptions.methods.includes(method.toLowerCase());
-
-  const invalidateMatchingCache = () => {
-    // There are two kinds of invalidate rules:
-    // invalidateUrls (array of URL like strings)
-    // invalidateUrlsRegex (RegExp)
-    // If a non-GET method is fired, by default it only invalidates its own endpoint.
-    // Invalidating /api/users cache by doing a PATCH, will not invalidate /api/accounts cache.
-    // However, in the case of users and accounts, they may be very interconnected,
-    // so perhaps you do want to invalidate /api/accounts when invalidating /api/users.
-
-    // If it's NOT one of the config.methods, invalidate caches
-    cache.deleteMatched(requestId);
-    // also invalidate caches matching to cacheOptions
-    if (cacheOptions.invalidateUrls) {
-      cacheOptions.invalidateUrls.forEach(
-        /** @type {string} */ invalidateUrl => {
-          cache.deleteMatched(invalidateUrl);
-        },
-      );
-    }
-    // also invalidate caches matching to invalidateUrlsRegex
-    if (cacheOptions.invalidateUrlsRegex) {
-      cache.deleteMatched(cacheOptions.invalidateUrlsRegex);
-    }
-  };
 
   // don't use cache if the request method is not part of the configs methods
   if (!isMethodSupported) {
-    invalidateMatchingCache();
-    return cacheRequest;
+    const { invalidateUrls, invalidateUrlsRegex } = cacheOptions;
+    invalidateMatchingCache({ requestId, invalidateUrls, invalidateUrlsRegex });
+    return request;
   }
 
-  const pendingRequest = cache.getPendingRequest(requestId);
+  const pendingRequest = pendingRequestStore.get(requestId);
   if (pendingRequest) {
     // there is another concurrent request, wait for it to finish
     await pendingRequest;
@@ -69,21 +52,21 @@ const createCacheRequestInterceptor = (
 
   const cacheResponse = cache.get(requestId, cacheOptions.timeToLive);
   if (cacheResponse) {
-    cacheRequest.cacheOptions = cacheRequest.cacheOptions ?? { useCache: false };
+    request.cacheOptions = request.cacheOptions ?? { useCache: false };
     /** @type {CacheResponse} */
     const response = cacheResponse.clone();
-    response.request = cacheRequest;
+    response.request = request;
     response.fromCache = true;
     return response;
   }
 
   // We want to cache this request, and it's not already cached
   // Mark this as a pending request, so that concurrent requests can use the response from this request
-  cache.setPendingRequest(requestId);
+  pendingRequestStore.set(requestId);
 
-  cacheRequest.requestCache = cache;
+  request.requestCache = cache;
 
-  return cacheRequest;
+  return request;
 };
 
 /**
@@ -91,38 +74,35 @@ const createCacheRequestInterceptor = (
  * @param {CacheOptions} globalCacheOptions
  * @returns {ResponseInterceptor}
  */
-const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheResponse} cacheResponse */ async cacheResponse => {
-  if (!cacheResponse.request) {
+const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheResponse} response */ async response => {
+  if (!response.request) {
     throw new Error('Missing request in response');
   }
-  const cache = cacheResponse.request.requestCache;
+  const cache = response.request.requestCache;
   if (!cache) {
-    return cacheResponse;
+    return response;
   }
 
-  const cacheOptions = sanitiseCacheOptions({
+  const cacheOptions = extendCacheOptions({
     ...globalCacheOptions,
-    ...cacheResponse.request?.cacheOptions,
+    ...response.request?.cacheOptions,
   });
-  validateCacheOptions(cacheOptions);
 
   // string that identifies cache entry
-  const requestId = cacheOptions.requestIdFunction(cacheResponse.request);
-  const isAlreadyFromCache = !!cacheResponse.fromCache;
+  const requestId = cacheOptions.requestIdFunction(response.request);
+  const isAlreadyFromCache = !!response.fromCache;
   // caching all responses with not default `timeToLive`
   const isCacheActive = cacheOptions.timeToLive > 0;
-  const isMethodSupported = cacheOptions.methods.includes(
-    cacheResponse.request.method.toLowerCase(),
-  );
+  const isMethodSupported = cacheOptions.methods.includes(response.request.method.toLowerCase());
 
   // if the request is one of the options.methods; store response in cache
   if (!isAlreadyFromCache && isCacheActive && isMethodSupported) {
     // store the response data in the cache and mark request as resolved
-    cache.set(requestId, cacheResponse.clone());
-    cache.resolvePendingRequest(requestId);
+    cache.set(requestId, response.clone());
+    pendingRequestStore.resolve(requestId);
   }
 
-  return cacheResponse;
+  return response;
 };
 
 /**

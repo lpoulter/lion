@@ -7,46 +7,6 @@ export default class Cache {
      * @private
      */
     this._cachedRequests = {};
-    /**
-     * @type {{ [requestId: string]: { promise: Promise<void>, resolve: (value?: any) => void } }}
-     * @private
-     */
-    this._pendingRequests = {};
-  }
-
-  /**
-   * Creates a promise for a pending request with given key
-   * @param {string} requestId
-   */
-  setPendingRequest(requestId) {
-    if (this._pendingRequests[requestId]) {
-      return;
-    }
-    /** @type {(value?: any) => void } */
-    let resolve;
-    const promise = new Promise(_resolve => {
-      resolve = _resolve;
-    });
-    // @ts-ignore
-    this._pendingRequests[requestId] = { promise, resolve };
-  }
-
-  /**
-   * Gets the promise for a pending request with given key
-   * @param {string} requestId
-   * @returns {Promise<void> | undefined}
-   */
-  getPendingRequest(requestId) {
-    return this._pendingRequests[requestId]?.promise;
-  }
-
-  /**
-   * Resolves the promise for a pending request with given key
-   * @param {string} requestId
-   */
-  resolvePendingRequest(requestId) {
-    this._pendingRequests[requestId]?.resolve();
-    delete this._pendingRequests[requestId];
   }
 
   /**
@@ -83,11 +43,10 @@ export default class Cache {
    * Delete all items from the cache that match given regex/string
    * @param {RegExp | string } regex an regular expression to match cache entries
    */
-  deleteMatched(regex) {
+  delete(regex) {
     Object.keys(this._cachedRequests).forEach(requestId => {
       if (new RegExp(regex).test(requestId)) {
         delete this._cachedRequests[requestId];
-        this.resolvePendingRequest(requestId);
       }
     });
   }

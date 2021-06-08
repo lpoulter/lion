@@ -1,5 +1,6 @@
 import './typedef.js';
 import Cache from './Cache.js';
+import PendingRequestStore from './PendingRequestStore.js';
 
 /**
  * The current cache
@@ -14,6 +15,12 @@ let currentCache;
 let currentCacheId;
 
 /**
+ * The pending request store
+ * @type {PendingRequestStore}
+ */
+export const pendingRequestStore = new PendingRequestStore();
+
+/**
  * Returns the active `Cache` instance for the current session.
  * There can be only 1 active session at all times.
  * @param {string} cacheId The cache id that is tied to the current session
@@ -26,6 +33,7 @@ export const getCacheById = cacheId => {
   if (cacheId !== currentCacheId) {
     currentCacheId = cacheId;
     currentCache = new Cache();
+    pendingRequestStore.clear();
   }
   return currentCache;
 };
@@ -61,7 +69,7 @@ const DEFAULT_TIME_TO_LIVE = 1000 * 60 * 60;
  * @param {CacheOptions} options Cache options
  * @returns {ValidatedCacheOptions}
  */
-export const sanitiseCacheOptions = ({
+export const extendCacheOptions = ({
   useCache = false,
   methods = ['get'],
   timeToLive = DEFAULT_TIME_TO_LIVE,
@@ -87,7 +95,7 @@ export const validateCacheOptions = ({
   requestIdFunction,
   invalidateUrls,
   invalidateUrlsRegex,
-}) => {
+} = {}) => {
   if (useCache !== undefined && typeof useCache !== 'boolean') {
     throw new Error('Property `useCache` must be a `boolean`');
   }
@@ -105,5 +113,39 @@ export const validateCacheOptions = ({
   }
   if (requestIdFunction !== undefined && typeof requestIdFunction !== 'function') {
     throw new Error('Property `getRequestId` must be a `function`');
+  }
+};
+
+export const invalidateMatchingCache = ({ requestId, invalidateUrls, invalidateUrlsRegex }) => {
+  // There are two kinds of invalidate rules:
+  // invalidateUrls (array of URL like strings)
+  // invalidateUrlsRegex (RegExp)
+  // If a non-GET method is fired, by default it only invalidates its own endpoint.
+  // Invalidating /api/users cache by doing a PATCH, will not invalidate /api/accounts cache.
+  // However, in the case of users and accounts, they may be very interconnected,
+  // so perhaps you do want to invalidate /api/accounts when invalidating /api/users.
+  // If it's NOT one of the config.methods, invalidate caches
+
+  /**
+   * Invalidates matching in the cache and pendingRequestStore
+   * @param {RegExp | string } regex an regular expression to match
+   */
+  const invalidateMatching = regex => {
+    currentCache.delete(regex);
+    pendingRequestStore.resolve(regex);
+  };
+
+  // invalidate this request
+  invalidateMatching(requestId);
+
+  // also invalidate caches matching to invalidateUrls
+  if (Array.isArray(invalidateUrls)) {
+    invalidateUrls.forEach(url => {
+      invalidateMatching(url);
+    });
+  }
+  // also invalidate caches matching to invalidateUrlsRegex
+  if (invalidateUrlsRegex) {
+    invalidateMatching(invalidateUrlsRegex);
   }
 };
