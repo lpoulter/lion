@@ -62,7 +62,7 @@ const DEFAULT_GET_REQUEST_ID = (
 /**
  * Defaults to 1 hour
  */
-const DEFAULT_TIME_TO_LIVE = 1000 * 60 * 60;
+const DEFAULT_MAX_AGE = 1000 * 60 * 60;
 
 /**
  * @param {CacheOptions} options Cache options
@@ -71,14 +71,14 @@ const DEFAULT_TIME_TO_LIVE = 1000 * 60 * 60;
 export const extendCacheOptions = ({
   useCache = false,
   methods = ['get'],
-  timeToLive = DEFAULT_TIME_TO_LIVE,
+  maxAge = DEFAULT_MAX_AGE,
   requestIdFunction = DEFAULT_GET_REQUEST_ID,
   invalidateUrls,
   invalidateUrlsRegex,
 }) => ({
   useCache,
   methods,
-  timeToLive,
+  maxAge,
   requestIdFunction,
   invalidateUrls,
   invalidateUrlsRegex,
@@ -90,7 +90,7 @@ export const extendCacheOptions = ({
 export const validateCacheOptions = ({
   useCache,
   methods,
-  timeToLive,
+  maxAge,
   requestIdFunction,
   invalidateUrls,
   invalidateUrlsRegex,
@@ -101,8 +101,8 @@ export const validateCacheOptions = ({
   if (methods !== undefined && JSON.stringify(methods) !== JSON.stringify(['get'])) {
     throw new Error('Cache can only be utilized with `GET` method');
   }
-  if (timeToLive !== undefined && !Number.isFinite(timeToLive)) {
-    throw new Error('Property `timeToLive` must be a finite `number`');
+  if (maxAge !== undefined && !Number.isFinite(maxAge)) {
+    throw new Error('Property `maxAge` must be a finite `number`');
   }
   if (invalidateUrls !== undefined && !Array.isArray(invalidateUrls)) {
     throw new Error('Property `invalidateUrls` must be an `Array` or `falsy`');

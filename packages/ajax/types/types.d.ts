@@ -35,7 +35,7 @@ export type RequestIdFunction = (
 export interface CacheOptions {
   useCache?: boolean;
   methods?: string[];
-  timeToLive?: number;
+  maxAge?: number;
   invalidateUrls?: string[];
   invalidateUrlsRegex?: RegExp;
   requestIdFunction?: RequestIdFunction;
@@ -48,7 +48,7 @@ export interface CacheOptionsWithIdentifier extends CacheOptions {
 export interface ValidatedCacheOptions extends CacheOptions {
   useCache: boolean;
   methods: string[];
-  timeToLive: number;
+  maxAge: number;
   requestIdFunction: RequestIdFunction;
 }
 

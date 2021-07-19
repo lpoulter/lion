@@ -24,16 +24,16 @@ export default class Cache {
   /**
    * Retrieve an item from the cache
    * @param {string} requestId key by which the cache is stored
-   * @param {number} maxCacheAge maximum age of a cached request to serve from cache
+   * @param {number} maxAge maximum age of a cached request to serve from cache
    * @returns {CacheResponse | undefined}
    */
-  get(requestId, maxCacheAge) {
+  get(requestId, maxAge) {
     const cachedRequest = this._cachedRequests[requestId];
     if (!cachedRequest) {
       return;
     }
     const cachedRequestAge = Date.now() - cachedRequest.createdAt;
-    if (Number.isFinite(maxCacheAge) && cachedRequestAge < maxCacheAge) {
+    if (Number.isFinite(maxAge) && cachedRequestAge < maxAge) {
       // eslint-disable-next-line consistent-return
       return cachedRequest.response;
     }
