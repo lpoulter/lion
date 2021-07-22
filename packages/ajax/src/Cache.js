@@ -24,10 +24,10 @@ export default class Cache {
   /**
    * Retrieve an item from the cache
    * @param {string} requestId key by which the cache is stored
-   * @param {number} maxAge maximum age of a cached request to serve from cache
+   * @param {number} maxAge maximum age of a cached request to serve from cache, in milliseconds
    * @returns {CacheResponse | undefined}
    */
-  get(requestId, maxAge) {
+  get(requestId, maxAge = 0) {
     const cachedRequest = this._cachedRequests[requestId];
     if (!cachedRequest) {
       return;
