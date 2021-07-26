@@ -115,16 +115,22 @@ export const validateCacheOptions = ({
   }
 };
 
-export const invalidateMatchingCache = ({ requestId, invalidateUrls, invalidateUrlsRegex }) => {
-  // There are two kinds of invalidate rules:
-  // invalidateUrls (array of URL like strings)
-  // invalidateUrlsRegex (RegExp)
-  // If a non-GET method is fired, by default it only invalidates its own endpoint.
-  // Invalidating /api/users cache by doing a PATCH, will not invalidate /api/accounts cache.
-  // However, in the case of users and accounts, they may be very interconnected,
-  // so perhaps you do want to invalidate /api/accounts when invalidating /api/users.
-  // If it's NOT one of the config.methods, invalidate caches
-
+/**
+ * Invalidates matching requestIds in the cache and pendingRequestStore
+ *
+ * There are two kinds of invalidate rules:
+ * invalidateUrls (array of URL like strings)
+ * invalidateUrlsRegex (RegExp)
+ * If a non-GET method is fired, by default it only invalidates its own endpoint.
+ * Invalidating /api/users cache by doing a PATCH, will not invalidate /api/accounts cache.
+ * However, in the case of users and accounts, they may be very interconnected,
+ * so perhaps you do want to invalidate /api/accounts when invalidating /api/users.
+ * If it's NOT one of the config.methods, invalidate caches
+ *
+ * @param requestId { string }
+ * @param cacheOptions { CacheOptions }
+ */
+export const invalidateMatchingCache = (requestId, { invalidateUrls, invalidateUrlsRegex }) => {
   /**
    * Invalidates matching in the cache and pendingRequestStore
    * @param {RegExp | string } regex an regular expression to match

@@ -38,8 +38,7 @@ const createCacheRequestInterceptor = (
   const isMethodSupported = cacheOptions.methods.includes(request.method.toLowerCase());
 
   if (!isMethodSupported) {
-    const { invalidateUrls, invalidateUrlsRegex } = cacheOptions;
-    invalidateMatchingCache({ requestId, invalidateUrls, invalidateUrlsRegex });
+    invalidateMatchingCache(requestId, cacheOptions);
     return request;
   }
 
