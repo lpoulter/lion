@@ -17,7 +17,7 @@ const getCacheIdentifier = () => {
 
 const cacheOptions = {
   useCache: true,
-  timeToLive: 1000 * 60 * 10, // 10 minutes
+  maxAge: 1000 * 60 * 10, // 10 minutes
 };
 
 const [cacheRequestInterceptor, cacheResponseInterceptor] = createCacheInterceptors(

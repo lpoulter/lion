@@ -17,7 +17,7 @@ const getCacheIdentifier = () => {
 
 const cacheOptions = {
   useCache: true,
-  timeToLive: 1000 * 60 * 10, // 10 minutes
+  maxAge: 1000 * 60 * 10, // 10 minutes
 };
 
 const [cacheRequestInterceptor, cacheResponseInterceptor] = createCacheInterceptors(
@@ -182,7 +182,7 @@ import { ajax, createCacheInterceptors } from '@lion-web/ajax';
 
 const globalCacheOptions = {
   useCache: true,
-  timeToLive: 1000 * 60 * 5, // 5 minutes
+  maxAge: 1000 * 60 * 5, // 5 minutes
 };
 
 // Cache is removed each time an identifier changes,
@@ -208,7 +208,7 @@ import { Ajax } from '@lion/ajax';
 export const ajax = new Ajax({
   cacheOptions: {
     useCache: true,
-    timeToLive: 1000 * 60 * 5, // 5 minutes
+    maxAge: 1000 * 60 * 5, // 5 minutes
     getCacheIdentifier: () => getActiveProfile().profileId,
   },
 });
@@ -284,7 +284,7 @@ export const cacheActionOptions = () => {
 
 Invalidating the cache, or cache busting, can be done in multiple ways:
 
-- Going past the `timeToLive` of the cache object
+- Going past the `maxAge` of the cache object
 - Changing cache identifier (e.g. user session or active profile changes)
 - Doing a non GET request to the cached endpoint
   - Invalidates the cache of that endpoint
@@ -292,20 +292,20 @@ Invalidating the cache, or cache busting, can be done in multiple ways:
 
 ## Time to live
 
-In this demo we pass a timeToLive of three seconds.
+In this demo we pass a maxAge of three seconds.
 Try clicking the fetch button and watch fromCache change whenever TTL expires.
 
 After TTL expires, the next request will set the cache again, and for the next 3 seconds you will get cached responses for subsequent requests.
 
 ```js preview-story
-export const cacheTimeToLive = () => {
+export const cacheMaxAge = () => {
   const actionLogger = renderLitAsNode(html`<sb-action-logger></sb-action-logger>`);
 
   const fetchHandler = () => {
     ajax
       .fetchJson(`../assets/pabu.json`, {
         cacheOptions: {
-          timeToLive: 1000 * 3, // 3 seconds
+          maxAge: 1000 * 3, // 3 seconds
         },
       })
       .then(result => {

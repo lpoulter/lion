@@ -152,13 +152,13 @@ describe('interceptors', () => {
         expect(test).to.throw();
       });
 
-      it('validates property `timeToLive` throws if not type `number`', () => {
+      it('validates property `maxAge` throws if not type `number`', () => {
         newCacheId();
         expect(() => {
           const indexes = addCacheInterceptors(ajax, {
             useCache: true,
             // @ts-ignore needed for test
-            timeToLive: '',
+            maxAge: '',
           });
           removeCacheInterceptors(ajax, indexes);
         }).to.throw();
@@ -195,7 +195,7 @@ describe('interceptors', () => {
         }).to.throw(/Cache can only be utilized with `GET` method/);
       });
 
-      it('throws error when getRequestId is not a function', () => {
+      it('throws error when requestIdFunction is not a function', () => {
         newCacheId();
 
         expect(() => {
@@ -205,7 +205,7 @@ describe('interceptors', () => {
             requestIdFunction: 'not a function',
           });
           removeCacheInterceptors(ajax, indexes);
-        }).to.throw(/Property `getRequestId` must be a `function`/);
+        }).to.throw(/Property `requestIdFunction` must be a `function`/);
       });
     });
 
@@ -215,7 +215,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 100,
+          maxAge: 100,
         });
 
         await ajax.fetch('/test');
@@ -228,68 +228,95 @@ describe('interceptors', () => {
       });
 
       // TODO: Check if this is the behaviour we want
-      it('all calls with non-default `timeToLive` are cached proactively', async () => {
+      it('all calls with non-default `maxAge` are cached proactively', async () => {
+        // Given
         newCacheId();
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: false,
-          timeToLive: 100,
+          maxAge: 100,
         });
 
+        // When
         await ajax.fetch('/test');
+
+        // Then
         expect(ajaxRequestSpy.calledOnce).to.be.true;
         expect(ajaxRequestSpy.calledWith('/test')).to.be.true;
         expect(fetchStub.callCount).to.equal(1);
+
+        // When
         await ajax.fetch('/test', {
           cacheOptions: {
             useCache: true,
           },
         });
+
+        // Then
         expect(fetchStub.callCount).to.equal(2);
+
+        // When
         await ajax.fetch('/test', {
           cacheOptions: {
             useCache: true,
           },
         });
+
+        // Then
         expect(fetchStub.callCount).to.equal(2);
+
         removeCacheInterceptors(ajax, indexes);
       });
 
       it('returns the cached object on second call with `useCache: true`, with querystring parameters', async () => {
+        // Given
         newCacheId();
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 100,
+          maxAge: 100,
         });
 
+        // When
         await ajax.fetch('/test', {
           params: {
             q: 'test',
             page: 1,
           },
         });
+
+        // Then
         expect(ajaxRequestSpy.calledOnce).to.be.true;
         expect(ajaxRequestSpy.calledWith('/test')).to.be.true;
+
+        // When
         await ajax.fetch('/test', {
           params: {
             q: 'test',
             page: 1,
           },
         });
+
+        // Then
         expect(fetchStub.callCount).to.equal(1);
+
         // a request with different param should not be cached
+
+        // When
         await ajax.fetch('/test', {
           params: {
             q: 'test',
             page: 2,
           },
         });
+
+        // Then
         expect(fetchStub.callCount).to.equal(2);
+
         removeCacheInterceptors(ajax, indexes);
       });
 
-      it('uses cache when inside `timeToLive: 5000` window', async () => {
+      it('uses cache when inside `maxAge: 5000` window', async () => {
         newCacheId();
         const clock = useFakeTimers({
           shouldAdvanceTime: true,
@@ -297,7 +324,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 5000,
+          maxAge: 5000,
         });
 
         await ajax.fetch('/test');
@@ -314,12 +341,13 @@ describe('interceptors', () => {
         removeCacheInterceptors(ajax, indexes);
       });
 
-      it('uses custom getRequestId when passed', async () => {
+      it('uses custom requestIdFunction when passed', async () => {
         newCacheId();
 
         const customRequestIdFn = /** @type {RequestIdFunction} */ (request, serializer) => {
           let serializedRequestParams = '';
           if (request.params) {
+            // @ts-ignore assume serializer is defined
             serializedRequestParams = `?${serializer(request.params)}`;
           }
           return `${new URL(/** @type {string} */ (request.url)).pathname}-${request.headers?.get(
@@ -345,7 +373,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 1000,
+          maxAge: 1000,
           invalidateUrlsRegex: /foo/gi,
         });
 
@@ -377,7 +405,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 1000,
+          maxAge: 1000,
           invalidateUrlsRegex: /posts/gi,
         });
 
@@ -411,7 +439,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 1000 * 60 * 60,
+          maxAge: 1000 * 60 * 60,
         });
 
         await ajax.fetch('/test-hour');
@@ -433,7 +461,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 500,
+          maxAge: 500,
         });
 
         const actionConfig = {
@@ -461,7 +489,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 100,
+          maxAge: 100,
         });
 
         await ajax.fetch('/test-post');
@@ -482,7 +510,7 @@ describe('interceptors', () => {
 
         const indexes = addCacheInterceptors(ajax, {
           useCache: true,
-          timeToLive: 0,
+          maxAge: 0,
         });
         console.log('============ 1 ===========');
         await ajax.fetch('/test');
@@ -535,7 +563,7 @@ describe('interceptors', () => {
 
       //     const indexes = addCacheInterceptors(ajax, {
       //       useCache: true,
-      //       timeToLive: 100,
+      //       maxAge: 100,
       //     });
 
       //     const request1 = ajax.fetch('/test');
@@ -567,7 +595,7 @@ describe('interceptors', () => {
 
       //     const indexes = addCacheInterceptors(ajax, {
       //       useCache: true,
-      //       timeToLive: 100,
+      //       maxAge: 100,
       //     });
 
       //     const response1 = await ajax.fetch('/test');

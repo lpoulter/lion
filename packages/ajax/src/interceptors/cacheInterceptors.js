@@ -49,7 +49,7 @@ const createCacheRequestInterceptor = (
     await pendingRequest;
   }
 
-  const cachedResponse = ajaxCache.get(requestId, cacheOptions.timeToLive);
+  const cachedResponse = ajaxCache.get(requestId, cacheOptions.maxAge);
   if (cachedResponse) {
     // Return the response from cache
     request.cacheOptions = request.cacheOptions ?? { useCache: false };
@@ -81,7 +81,7 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
 
   const requestId = cacheOptions.requestIdFunction(response.request);
   const isAlreadyFromCache = !!response.fromCache;
-  const isCacheActive = cacheOptions.timeToLive > 0;
+  const isCacheActive = cacheOptions.maxAge > 0;
   const isMethodSupported = cacheOptions.methods.includes(response.request?.method.toLowerCase());
 
   if (!isAlreadyFromCache && isCacheActive && isMethodSupported) {

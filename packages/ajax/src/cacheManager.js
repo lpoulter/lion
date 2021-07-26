@@ -111,7 +111,7 @@ export const validateCacheOptions = ({
     throw new Error('Property `invalidateUrlsRegex` must be a `RegExp` or `falsy`');
   }
   if (requestIdFunction !== undefined && typeof requestIdFunction !== 'function') {
-    throw new Error('Property `getRequestId` must be a `function`');
+    throw new Error('Property `requestIdFunction` must be a `function`');
   }
 };
 
