@@ -80,7 +80,7 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
 
   const requestId = cacheOptions.requestIdFunction(response.request);
   const isAlreadyFromCache = !!response.fromCache;
-  const isCacheActive = cacheOptions.maxAge > 0;
+  const isCacheActive = cacheOptions.useCache;
   const isMethodSupported = cacheOptions.methods.includes(response.request?.method.toLowerCase());
 
   if (!isAlreadyFromCache && isCacheActive && isMethodSupported) {

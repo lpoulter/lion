@@ -288,6 +288,7 @@ describe('interceptors', () => {
         // Then
         expect(ajaxRequestSpy.calledOnce).to.be.true;
         expect(ajaxRequestSpy.calledWith('/test')).to.be.true;
+        expect(fetchStub.callCount).to.equal(1);
 
         // When
         await ajax.fetch('/test', {
@@ -513,9 +514,9 @@ describe('interceptors', () => {
           maxAge: 0,
         });
         console.log('============ 1 ===========');
-        await ajax.fetch('/test');
-        console.log('============ 2 ===========');
         const clock = useFakeTimers();
+        console.log('============ 2 ===========');
+        await ajax.fetch('/test');
         console.log('============ 3 ===========');
         expect(ajaxRequestSpy.calledOnce).to.be.true;
         console.log('============ 4 ===========');
