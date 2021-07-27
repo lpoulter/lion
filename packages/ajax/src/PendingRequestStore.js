@@ -37,15 +37,19 @@ export default class PendingRequestStore {
 
   /**
    * Resolves the promise of pending requests that match given regex/string
-   * @param {RegExp | string } regex an regular expression to match store entries
+   * @param {RegExp | string } requestId an regular expression to match store entries
    */
-  resolve(regex) {
-    Object.keys(this._pendingRequests).forEach(requestId => {
-      if (new RegExp(regex).test(requestId)) {
-        this._pendingRequests[requestId]?.resolve();
-        delete this._pendingRequests[requestId];
-      }
-    });
+  resolve(requestId) {
+    if (typeof requestId === 'string') {
+      this._pendingRequests[requestId]?.resolve();
+      delete this._pendingRequests[requestId];
+    } else {
+      Object.keys(this._pendingRequests).forEach(pendingRequestId => {
+        if (requestId.test(pendingRequestId)) {
+          this.resolve(pendingRequestId);
+        }
+      });
+    }
   }
 
   reset() {
