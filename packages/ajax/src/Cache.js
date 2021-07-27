@@ -40,13 +40,21 @@ export default class Cache {
   }
 
   /**
-   * Delete all items from the cache that match given regex/string
-   * @param {RegExp | string } regex an regular expression to match cache entries
+   * Delete the item with the given requestId from the cache
+   * @param {string } requestId the request id to delete from the cache
    */
-  delete(regex) {
+  delete(requestId) {
+    delete this._cachedRequests[requestId];
+  }
+
+  /**
+   * Delete all items from the cache that match given regex
+   * @param {RegExp} regex a regular expression to match cache entries
+   */
+  deleteMatching(regex) {
     Object.keys(this._cachedRequests).forEach(requestId => {
       if (new RegExp(regex).test(requestId)) {
-        delete this._cachedRequests[requestId];
+        this.delete(requestId);
       }
     });
   }

@@ -95,11 +95,11 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
  * Response interceptor to cache relevant requests
  * @param {function(): string} getCacheId used to invalidate cache if identifier is changed
  * @param {CacheOptions} globalCacheOptions
- * @returns [{RequestInterceptor}, {ResponseInterceptor}]
+ * @returns {{cacheRequestInterceptor: RequestInterceptor, cacheResponseInterceptor: ResponseInterceptor}}
  */
 export const createCacheInterceptors = (getCacheId, globalCacheOptions) => {
   validateCacheOptions(globalCacheOptions);
-  const requestInterceptor = createCacheRequestInterceptor(getCacheId, globalCacheOptions);
-  const responseInterceptor = createCacheResponseInterceptor(globalCacheOptions);
-  return [requestInterceptor, responseInterceptor];
+  const cacheRequestInterceptor = createCacheRequestInterceptor(getCacheId, globalCacheOptions);
+  const cacheResponseInterceptor = createCacheResponseInterceptor(globalCacheOptions);
+  return { cacheRequestInterceptor, cacheResponseInterceptor };
 };

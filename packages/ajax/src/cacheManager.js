@@ -131,26 +131,20 @@ export const validateCacheOptions = ({
  * @param cacheOptions { CacheOptions }
  */
 export const invalidateMatchingCache = (requestId, { invalidateUrls, invalidateUrlsRegex }) => {
-  /**
-   * Invalidates matching in the cache and pendingRequestStore
-   * @param {RegExp | string } regex an regular expression to match
-   */
-  const invalidateMatching = regex => {
-    ajaxCache.delete(regex);
-    pendingRequestStore.resolve(regex);
-  };
-
   // invalidate this request
-  invalidateMatching(requestId);
+  ajaxCache.delete(requestId);
+  pendingRequestStore.resolve(requestId);
 
   // also invalidate caches matching to invalidateUrls
   if (Array.isArray(invalidateUrls)) {
     invalidateUrls.forEach(url => {
-      invalidateMatching(url);
+      ajaxCache.delete(url);
+      pendingRequestStore.resolve(url);
     });
   }
   // also invalidate caches matching to invalidateUrlsRegex
   if (invalidateUrlsRegex) {
-    invalidateMatching(invalidateUrlsRegex);
+    ajaxCache.deleteMatching(invalidateUrlsRegex);
+    pendingRequestStore.resolveMatching(invalidateUrlsRegex);
   }
 };

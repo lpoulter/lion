@@ -5,10 +5,16 @@ import { acceptLanguageRequestInterceptor } from '../src/interceptors/acceptLang
 import { createXsrfRequestInterceptor, getCookie } from '../src/interceptors/xsrfHeader.js';
 import { createCacheInterceptors } from '../src/interceptors/cacheInterceptors.js';
 import { Ajax } from '../index.js';
+import { extendCacheOptions } from '../src/cacheManager.js';
 
-const ajax = new Ajax();
+/** @type {Ajax} */
+let ajax;
 
 describe('interceptors', () => {
+  beforeEach(() => {
+    ajax = new Ajax();
+  });
+
   describe('getCookie()', () => {
     it('returns the cookie value', () => {
       expect(getCookie('foo', { cookie: 'foo=bar' })).to.equal('bar');
@@ -82,41 +88,17 @@ describe('interceptors', () => {
     };
 
     /**
-     * @param {ajax} ajaxInstance
+     * @param {Ajax} ajaxInstance
      * @param {CacheOptions} options
      */
     const addCacheInterceptors = (ajaxInstance, options) => {
-      const [cacheRequestInterceptor, cacheResponseInterceptor] = createCacheInterceptors(
+      const { cacheRequestInterceptor, cacheResponseInterceptor } = createCacheInterceptors(
         getCacheIdentifier,
         options,
       );
 
-      const requestInterceptorIndex =
-        ajaxInstance._requestInterceptors.push(
-          /** @type {RequestInterceptor} */ (cacheRequestInterceptor),
-        ) - 1;
-
-      const responseInterceptorIndex =
-        ajaxInstance._responseInterceptors.push(
-          /** @type {ResponseInterceptor} */ (cacheResponseInterceptor),
-        ) - 1;
-
-      return {
-        requestInterceptorIndex,
-        responseInterceptorIndex,
-      };
-    };
-
-    /**
-     * @param {ajax} ajaxInstance
-     * @param {{requestInterceptorIndex: number, responseInterceptorIndex: number}} indexes
-     */
-    const removeCacheInterceptors = (
-      ajaxInstance,
-      { requestInterceptorIndex, responseInterceptorIndex },
-    ) => {
-      ajaxInstance._requestInterceptors.splice(requestInterceptorIndex, 1);
-      ajaxInstance._responseInterceptors.splice(responseInterceptorIndex, 1);
+      ajaxInstance._requestInterceptors.push(cacheRequestInterceptor);
+      ajaxInstance._responseInterceptors.push(cacheResponseInterceptor);
     };
 
     beforeEach(() => {
@@ -143,11 +125,10 @@ describe('interceptors', () => {
       it('validates `useCache`', () => {
         newCacheId();
         const test = () => {
-          const indexes = addCacheInterceptors(ajax, {
+          addCacheInterceptors(ajax, {
             // @ts-ignore needed for test
             useCache: 'fakeUseCacheType',
           });
-          removeCacheInterceptors(ajax, indexes);
         };
         expect(test).to.throw();
       });
@@ -155,12 +136,11 @@ describe('interceptors', () => {
       it('validates property `maxAge` throws if not type `number`', () => {
         newCacheId();
         expect(() => {
-          const indexes = addCacheInterceptors(ajax, {
+          addCacheInterceptors(ajax, {
             useCache: true,
             // @ts-ignore needed for test
             maxAge: '',
           });
-          removeCacheInterceptors(ajax, indexes);
         }).to.throw();
       });
 
@@ -169,7 +149,7 @@ describe('interceptors', () => {
         // @ts-ignore needed for test
         cacheId = '';
 
-        const indexes = addCacheInterceptors(ajax, { useCache: true });
+        addCacheInterceptors(ajax, { useCache: true });
         await ajax
           .fetch('/test')
           .catch(
@@ -177,9 +157,7 @@ describe('interceptors', () => {
               expect(err.message).to.equal('Invalid cache identifier');
             },
           )
-          .finally(() => {
-            removeCacheInterceptors(ajax, indexes);
-          });
+          .finally(() => {});
         cacheId = cacheSessionId;
       });
 
@@ -187,11 +165,10 @@ describe('interceptors', () => {
         newCacheId();
 
         expect(() => {
-          const indexes = addCacheInterceptors(ajax, {
+          addCacheInterceptors(ajax, {
             useCache: true,
             methods: ['get', 'post'],
           });
-          removeCacheInterceptors(ajax, indexes);
         }).to.throw(/Cache can only be utilized with `GET` method/);
       });
 
@@ -199,12 +176,11 @@ describe('interceptors', () => {
         newCacheId();
 
         expect(() => {
-          const indexes = addCacheInterceptors(ajax, {
+          addCacheInterceptors(ajax, {
             useCache: true,
             // @ts-ignore needed for test
             requestIdFunction: 'not a function',
           });
-          removeCacheInterceptors(ajax, indexes);
         }).to.throw(/Property `requestIdFunction` must be a `function`/);
       });
     });
@@ -213,7 +189,7 @@ describe('interceptors', () => {
       it('returns the cached object on second call with `useCache: true`', async () => {
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 100,
         });
@@ -223,8 +199,6 @@ describe('interceptors', () => {
         expect(ajaxRequestSpy.calledWith('/test')).to.be.true;
         await ajax.fetch('/test');
         expect(fetchStub.callCount).to.equal(1);
-
-        removeCacheInterceptors(ajax, indexes);
       });
 
       // TODO: Check if this is the behaviour we want
@@ -232,7 +206,7 @@ describe('interceptors', () => {
         // Given
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: false,
           maxAge: 100,
         });
@@ -264,15 +238,13 @@ describe('interceptors', () => {
 
         // Then
         expect(fetchStub.callCount).to.equal(2);
-
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('returns the cached object on second call with `useCache: true`, with querystring parameters', async () => {
         // Given
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 100,
         });
@@ -313,8 +285,6 @@ describe('interceptors', () => {
 
         // Then
         expect(fetchStub.callCount).to.equal(2);
-
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('uses cache when inside `maxAge: 5000` window', async () => {
@@ -323,7 +293,7 @@ describe('interceptors', () => {
           shouldAdvanceTime: true,
         });
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 5000,
         });
@@ -339,7 +309,6 @@ describe('interceptors', () => {
         await ajax.fetch('/test');
         expect(fetchStub.callCount).to.equal(2);
         clock.restore();
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('uses custom requestIdFunction when passed', async () => {
@@ -356,7 +325,7 @@ describe('interceptors', () => {
           )}${serializedRequestParams}`;
         };
         const reqIdSpy = spy(customRequestIdFn);
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           requestIdFunction: reqIdSpy,
         });
@@ -364,7 +333,6 @@ describe('interceptors', () => {
         await ajax.fetch('/test', { headers: { 'x-id': '1' } });
         expect(reqIdSpy.calledOnce);
         expect(reqIdSpy.returnValues[0]).to.equal(`/test-1`);
-        removeCacheInterceptors(ajax, indexes);
       });
     });
 
@@ -372,7 +340,7 @@ describe('interceptors', () => {
       it('previously cached data has to be invalidated when regex invalidation rule triggered', async () => {
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 1000,
           invalidateUrlsRegex: /foo/gi,
@@ -397,14 +365,12 @@ describe('interceptors', () => {
         expect(fetchStub.callCount).to.equal(5);
         await ajax.fetch('/foo-request-2'); // not cached anymore
         expect(fetchStub.callCount).to.equal(6);
-
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('previously cached data has to be invalidated when regex invalidation rule triggered and urls are nested', async () => {
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 1000,
           invalidateUrlsRegex: /posts/gi,
@@ -428,8 +394,6 @@ describe('interceptors', () => {
         expect(fetchStub.callCount).to.equal(5);
         await ajax.fetch('/posts/1'); // no longer cached => new request
         expect(fetchStub.callCount).to.equal(6);
-
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('deletes cache after one hour', async () => {
@@ -438,7 +402,7 @@ describe('interceptors', () => {
           shouldAdvanceTime: true,
         });
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 1000 * 60 * 60,
         });
@@ -454,41 +418,50 @@ describe('interceptors', () => {
         await ajax.fetch('/test-hour');
         expect(fetchStub.callCount).to.equal(2);
         clock.restore();
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('invalidates invalidateUrls endpoints', async () => {
+        const { requestIdFunction } = extendCacheOptions({});
+
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 500,
         });
 
-        const actionConfig = {
-          cacheOptions: {
-            invalidateUrls: ['/test-invalid-url'],
-          },
+        const cacheOptions = {
+          invalidateUrls: [
+            requestIdFunction({
+              url: new URL('/test-invalid-url', window.location.href).toString(),
+              params: { foo: 1, bar: 2 },
+            }),
+          ],
         };
 
-        await ajax.fetch('/test-valid-url', { ...actionConfig });
+        await ajax.fetch('/test-valid-url', { cacheOptions });
         expect(fetchStub.callCount).to.equal(1);
-        await ajax.fetch('/test-invalid-url');
+
+        await ajax.fetch('/test-invalid-url?foo=1&bar=2');
         expect(fetchStub.callCount).to.equal(2);
+
+        await ajax.fetch('/test-invalid-url?foo=1&bar=2');
+        expect(fetchStub.callCount).to.equal(2);
+
         // 'post' will invalidate 'own' cache and the one mentioned in config
-        await ajax.fetch('/test-valid-url', { ...actionConfig, method: 'POST' });
+        await ajax.fetch('/test-valid-url', { cacheOptions, method: 'POST' });
         expect(fetchStub.callCount).to.equal(3);
-        await ajax.fetch('/test-invalid-url');
+
+        await ajax.fetch('/test-invalid-url?foo=1&bar=2');
         // indicates that 'test-invalid-url' cache was removed
         // because the server registered new request
         expect(fetchStub.callCount).to.equal(4);
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('invalidates cache on a post', async () => {
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 100,
         });
@@ -503,112 +476,109 @@ describe('interceptors', () => {
         expect(fetchStub.callCount).to.equal(2);
         await ajax.fetch('/test-post');
         expect(fetchStub.callCount).to.equal(3);
-        removeCacheInterceptors(ajax, indexes);
       });
 
       it('caches response but does not return it when expiration time is 0', async () => {
         newCacheId();
 
-        const indexes = addCacheInterceptors(ajax, {
+        addCacheInterceptors(ajax, {
           useCache: true,
           maxAge: 0,
         });
-        console.log('============ 1 ===========');
+
         const clock = useFakeTimers();
-        console.log('============ 2 ===========');
+
         await ajax.fetch('/test');
-        console.log('============ 3 ===========');
+
         expect(ajaxRequestSpy.calledOnce).to.be.true;
-        console.log('============ 4 ===========');
+
         expect(ajaxRequestSpy.calledWith('/test')).to.be.true;
-        console.log('============ 5 ===========');
+
         clock.tick(1);
-        console.log('============ 6 ===========');
+
         await ajax.fetch('/test');
-        console.log('============ 7 ===========');
+
         clock.restore();
-        console.log('============ 8 ===========');
+
         expect(fetchStub.callCount).to.equal(2);
-        console.log('============ 9 ===========');
-        removeCacheInterceptors(ajax, indexes);
       });
-
-      //   it('does not use cache when `useCache: false` in the action', async () => {
-      //     newCacheId();
-      //     getCacheIdentifier = () => 'cacheIdentifier2';
-
-      //     const ajaxAlwaysRequestSpy = spy(ajax, 'fetch');
-      //     const indexes = addCacheInterceptors(ajax, { useCache: true });
-
-      //     await ajax.fetch('/test');
-      //     expect(ajaxAlwaysRequestSpy.calledOnce, 'calledOnce').to.be.true;
-      //     expect(ajaxAlwaysRequestSpy.calledWith('/test'));
-      //     await ajax.fetch('/test', { cacheOptions: { useCache: false } });
-      //     expect(fetchStub.callCount).to.equal(2);
-      //     ajaxAlwaysRequestSpy.restore();
-      //     removeCacheInterceptors(ajax, indexes);
+      //
+      // it('does not use cache when `useCache: false` in the action', async () => {
+      //   // @ts-ignore
+      //   cacheId = 'cacheIdentifier2';
+      //
+      //   const ajaxAlwaysRequestSpy = spy(ajax, 'fetch');
+      //   addCacheInterceptors(ajax, { useCache: true });
+      //
+      //   await ajax.fetch('/test');
+      //   expect(ajaxAlwaysRequestSpy.calledOnce, 'calledOnce').to.be.true;
+      //   expect(ajaxAlwaysRequestSpy.calledWith('/test'));
+      //   await ajax.fetch('/test', { cacheOptions: { useCache: false } });
+      //   expect(fetchStub.callCount).to.equal(2);
+      //   ajaxAlwaysRequestSpy.restore();
+      //
+      // });
+      //
+      // it('caches concurrent requests', async () => {
+      //   newCacheId();
+      //
+      //   let i = 0;
+      //   fetchStub.returns(
+      //     new Promise(resolve => {
+      //       i += 1;
+      //       setTimeout(() => {
+      //         resolve(new Response(`mock response ${i}`));
+      //       }, 5);
+      //     }),
+      //   );
+      //
+      //   addCacheInterceptors(ajax, {
+      //     useCache: true,
+      //     maxAge: 100,
       //   });
-
-      //   it('caches concurrent requests', async () => {
-      //     newCacheId();
-
-      //     let i = 0;
-      //     fetchStub.returns(
-      //       new Promise(resolve => {
-      //         i += 1;
-      //         setTimeout(() => {
-      //           resolve(new Response(`mock response ${i}`));
-      //         }, 5);
-      //       }),
-      //     );
-
-      //     const indexes = addCacheInterceptors(ajax, {
-      //       useCache: true,
-      //       maxAge: 100,
-      //     });
-
-      //     const request1 = ajax.fetch('/test');
-      //     const request2 = ajax.fetch('/test');
-      //     await aTimeout(1);
-      //     const request3 = ajax.fetch('/test');
-      //     await aTimeout(3);
-      //     const request4 = ajax.fetch('/test');
-      //     const responses = await Promise.all([request1, request2, request3, request4]);
-      //     expect(fetchStub.callCount).to.equal(1);
-      //     const responseTexts = await Promise.all(responses.map(r => r.text()));
-      //     expect(responseTexts).to.eql([
-      //       'mock response 1',
-      //       'mock response 1',
-      //       'mock response 1',
-      //       'mock response 1',
-      //     ]);
-
-      //     removeCacheInterceptors(ajax, indexes);
+      //
+      //   const request1 = ajax.fetch('/test');
+      //   const request2 = ajax.fetch('/test');
+      //   await aTimeout(1);
+      //   const request3 = ajax.fetch('/test');
+      //   await aTimeout(3);
+      //   const request4 = ajax.fetch('/test');
+      //   const responses = await Promise.all([request1, request2, request3, request4]);
+      //   expect(fetchStub.callCount).to.equal(1);
+      //   const responseTexts = await Promise.all(responses.map(r => r.text()));
+      //   expect(responseTexts).to.eql([
+      //     'mock response 1',
+      //     'mock response 1',
+      //     'mock response 1',
+      //     'mock response 1',
+      //   ]);
+      //
+      //
+      // });
+      //
+      // it('preserves status and headers when returning cached response', async () => {
+      //   newCacheId();
+      //   fetchStub.returns(
+      //     Promise.resolve(
+      //       new Response('mock response', { status: 206, headers: { 'x-foo': 'x-bar' } }),
+      //     ),
+      //   );
+      //
+      //   addCacheInterceptors(ajax, {
+      //     useCache: true,
+      //     maxAge: 100,
       //   });
-
-      //   it('preserves status and headers when returning cached response', async () => {
-      //     newCacheId();
-      //     fetchStub.returns(
-      //       Promise.resolve(
-      //         new Response('mock response', { status: 206, headers: { 'x-foo': 'x-bar' } }),
-      //       ),
-      //     );
-
-      //     const indexes = addCacheInterceptors(ajax, {
-      //       useCache: true,
-      //       maxAge: 100,
-      //     });
-
-      //     const response1 = await ajax.fetch('/test');
-      //     const response2 = await ajax.fetch('/test');
-      //     expect(fetchStub.callCount).to.equal(1);
-      //     expect(response1.status).to.equal(206);
-      //     expect(response1.headers.get('x-foo')).to.equal('x-bar');
-      //     expect(response2.status).to.equal(206);
-      //     expect(response2.headers.get('x-foo')).to.equal('x-bar');
-
-      //     removeCacheInterceptors(ajax, indexes);
-      //   });
+      //
+      //   const response1 = await ajax.fetch('/test');
+      //   const response2 = await ajax.fetch('/test');
+      //   expect(fetchStub.callCount).to.equal(1);
+      //   expect(response1.status).to.equal(206);
+      //   expect(response1.headers.get('x-foo')).to.equal('x-bar');
+      //   expect(response2.status).to.equal(206);
+      //   expect(response2.headers.get('x-foo')).to.equal('x-bar');
+      //
+      //
+      // });
     });
   });
 });

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { expect } from '@open-wc/testing';
-import { spy } from 'sinon';
+import * as sinon from 'sinon';
 import {
   ajaxCache,
   pendingRequestStore,
@@ -30,8 +30,8 @@ describe('cacheManager', () => {
     let pendingRequestStoreSpy;
 
     beforeEach(() => {
-      ajaxCacheSpy = spy(ajaxCache, 'reset');
-      pendingRequestStoreSpy = spy(pendingRequestStore, 'reset');
+      ajaxCacheSpy = sinon.spy(ajaxCache, 'reset');
+      pendingRequestStoreSpy = sinon.spy(pendingRequestStore, 'reset');
     });
 
     afterEach(() => {
@@ -235,17 +235,15 @@ describe('cacheManager', () => {
   });
 
   describe('invalidateMatchingCache', () => {
-    let ajaxCacheSpy;
-    let pendingRequestStoreSpy;
-
     beforeEach(() => {
-      ajaxCacheSpy = spy(ajaxCache, 'delete');
-      pendingRequestStoreSpy = spy(pendingRequestStore, 'resolve');
+      sinon.spy(ajaxCache, 'delete');
+      sinon.spy(ajaxCache, 'deleteMatching');
+      sinon.spy(pendingRequestStore, 'resolve');
+      sinon.spy(pendingRequestStore, 'resolveMatching');
     });
 
     afterEach(() => {
-      ajaxCacheSpy.restore();
-      pendingRequestStoreSpy.restore();
+      sinon.restore();
     });
 
     it('calls delete on the ajaxCache and calls resolve on the pendingRequestStore', () => {
@@ -254,11 +252,11 @@ describe('cacheManager', () => {
       // Act
       invalidateMatchingCache(requestId, {});
       // Assert
-      expect(ajaxCacheSpy.calledOnce).to.be.true;
-      expect(pendingRequestStoreSpy.calledOnce).to.be.true;
+      expect(ajaxCache.delete).to.have.been.calledOnce;
+      expect(pendingRequestStore.resolve.calledOnce).to.be.true;
 
-      expect(ajaxCacheSpy.calledWith(requestId)).to.be.true;
-      expect(pendingRequestStoreSpy.calledWith(requestId)).to.be.true;
+      expect(ajaxCache.delete.calledWith(requestId)).to.be.true;
+      expect(pendingRequestStore.resolve.calledWith(requestId)).to.be.true;
     });
 
     it('calls invalidateMatching for all URL items in the invalidateUrls argument', () => {
@@ -268,14 +266,14 @@ describe('cacheManager', () => {
       // Act
       invalidateMatchingCache(requestId, { invalidateUrls });
       // Assert
-      expect(ajaxCacheSpy).to.have.been.calledTwice;
-      expect(pendingRequestStoreSpy).to.have.been.calledTwice;
+      expect(ajaxCache.delete.calledTwice).to.be.true;
+      expect(pendingRequestStore.resolve.calledTwice).to.be.true;
 
-      expect(ajaxCacheSpy.calledWith(requestId)).to.be.true;
-      expect(pendingRequestStoreSpy.calledWith(requestId)).to.be.true;
+      expect(ajaxCache.delete.calledWith(requestId)).to.be.true;
+      expect(pendingRequestStore.resolve.calledWith(requestId)).to.be.true;
 
-      expect(ajaxCacheSpy.calledWith('https://f00.bar/')).to.be.true;
-      expect(pendingRequestStoreSpy.calledWith('https://f00.bar/')).to.be.true;
+      expect(ajaxCache.delete.calledWith('https://f00.bar/')).to.be.true;
+      expect(pendingRequestStore.resolve.calledWith('https://f00.bar/')).to.be.true;
     });
 
     it('calls invalidateMatching when the invalidateUrlsRegex argument is passed', () => {
@@ -285,14 +283,16 @@ describe('cacheManager', () => {
       // Act
       invalidateMatchingCache(requestId, { invalidateUrlsRegex });
       // Assert
-      expect(ajaxCacheSpy).to.have.been.calledTwice;
-      expect(pendingRequestStoreSpy).to.have.been.calledTwice;
+      expect(ajaxCache.delete.calledOnce).to.be.true;
+      expect(ajaxCache.deleteMatching.calledOnce).to.be.true;
+      expect(pendingRequestStore.resolve.calledOnce).to.be.true;
+      expect(pendingRequestStore.resolveMatching.calledOnce).to.be.true;
 
-      expect(ajaxCacheSpy.calledWith(requestId)).to.be.true;
-      expect(pendingRequestStoreSpy.calledWith(requestId)).to.be.true;
+      expect(ajaxCache.delete.calledWith(requestId)).to.be.true;
+      expect(pendingRequestStore.resolve.calledWith(requestId)).to.be.true;
 
-      expect(ajaxCacheSpy.calledWith('f00')).to.be.true;
-      expect(pendingRequestStoreSpy.calledWith('f00')).to.be.true;
+      expect(ajaxCache.deleteMatching.calledWith('f00')).to.be.true;
+      expect(pendingRequestStore.resolveMatching.calledWith('f00')).to.be.true;
     });
   });
 });

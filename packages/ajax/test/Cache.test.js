@@ -165,7 +165,7 @@ describe('Cache', () => {
       expect(cache.get('requestId2', maxAge)).to.equal(response2);
       expect(cache.get('anotherRequestId', maxAge)).to.equal(response3);
       // When
-      cache.delete(/^requestId/);
+      cache.deleteMatching(/^requestId/);
       // Then
       expect(cache.get('requestId1', maxAge)).to.be.undefined;
       expect(cache.get('requestId2', maxAge)).to.be.undefined;

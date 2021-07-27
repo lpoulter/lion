@@ -112,7 +112,9 @@ describe('PendingRequestStore', () => {
 
       expect(pendingRequestStore.get('do-groceries')).to.be.undefined;
     });
+  });
 
+  describe('resolving multiple requestIds by regular expression', () => {
     it('will resolve multiple promises matching a regular expression and delete them', async () => {
       // Given
       let canIPlayNow = false;
@@ -126,7 +128,7 @@ describe('PendingRequestStore', () => {
       ]);
 
       // When
-      pendingRequestStore.resolve(/^do-/);
+      pendingRequestStore.resolveMatching(/^do-/);
       await choresAllDone.then(() => {
         canIPlayNow = true;
       });
@@ -146,28 +148,12 @@ describe('PendingRequestStore', () => {
     pendingRequestStore.set('ponder-meaning-of-life');
 
     // When
-    pendingRequestStore.resolve(/^do-/);
+    pendingRequestStore.resolveMatching(/^do-/);
 
     // Then
     expect(pendingRequestStore.get('do-groceries')).to.be.undefined;
     expect(pendingRequestStore.get('do-dishes')).to.be.undefined;
 
     expect(pendingRequestStore.get('ponder-meaning-of-life')).not.to.be.undefined;
-  });
-
-  it('will play nice with request IDs that have special RegExp characters like question marks', async () => {
-    // Given
-    const requestId = 'http://localhost:8000/test?q=test&page=1';
-    pendingRequestStore.set(requestId);
-    const promiseResult = pendingRequestStore
-      .get(requestId)
-      .catch(() => expect.fail('Promise was rejected before it could be resolved'));
-
-    // When
-    pendingRequestStore.resolve(requestId);
-    await promiseResult;
-
-    // Then
-    expect(pendingRequestStore.get(requestId)).to.be.undefined;
   });
 });

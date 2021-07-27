@@ -49,12 +49,12 @@ export class Ajax {
 
     const { cacheOptions } = this.__config;
     if (cacheOptions?.useCache) {
-      const [cacheRequestInterceptor, cacheResponseInterceptor] = createCacheInterceptors(
+      const { cacheRequestInterceptor, cacheResponseInterceptor } = createCacheInterceptors(
         cacheOptions.getCacheIdentifier,
         cacheOptions,
       );
-      this.addRequestInterceptor(/** @type {RequestInterceptor} */ (cacheRequestInterceptor));
-      this.addResponseInterceptor(/** @type {ResponseInterceptor} */ (cacheResponseInterceptor));
+      this.addRequestInterceptor(cacheRequestInterceptor);
+      this.addResponseInterceptor(cacheResponseInterceptor);
     }
   }
 
