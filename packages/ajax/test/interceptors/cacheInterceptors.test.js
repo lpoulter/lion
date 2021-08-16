@@ -91,6 +91,7 @@ describe('cache interceptors', () => {
       addCacheInterceptors(ajax, { useCache: true });
       await ajax
         .fetch('/test')
+        .then(() => expect.fail('fetch should not resolve here'))
         .catch(
           /** @param {Error} err */ err => {
             expect(err.message).to.equal('Invalid cache identifier');
@@ -272,6 +273,28 @@ describe('cache interceptors', () => {
       await ajax.fetch('/test', { headers: { 'x-id': '1' } });
       expect(reqIdSpy.calledOnce);
       expect(reqIdSpy.returnValues[0]).to.equal(`/test-1`);
+    });
+
+    it('throws when the request object is missing from the response', async () => {
+      const { cacheResponseInterceptor } = createCacheInterceptors(() => 'cache-id', {});
+
+      // @ts-ignore not an actual valid CacheResponse object
+      await cacheResponseInterceptor({})
+        .then(() => expect.fail('cacheResponseInterceptor should not resolve here'))
+        .catch(
+          /** @param {Error} err */ err => {
+            expect(err.message).to.equal('Missing request in response');
+          },
+        );
+
+      // @ts-ignore not an actual valid CacheResponse object
+      await cacheResponseInterceptor({ request: { method: 'get' } })
+        .then(() => expect('everything').to.be.ok)
+        .catch(err =>
+          expect.fail(
+            `cacheResponseInterceptor should resolve here, but threw an error: ${err.message}`,
+          ),
+        );
     });
   });
 
@@ -460,87 +483,85 @@ describe('cache interceptors', () => {
       expect(fetchStub.callCount).to.equal(2);
     });
 
-    // it.only('caches concurrent requests', async () => {
-    //   console.log('here')
-    //   newCacheId();
-    //
-    //   const clock = sinon.useFakeTimers();
-    //
-    //   let i = 0;
-    //   fetchStub.callsFake(async () => {
-    //     i += 1;
-    //     /**
-    //      * @param {number} timeout
-    //      */
-    //     const setTimeoutPromise = (timeout) => {
-    //       return new Promise((resolve) => window.setTimeout(resolve, timeout));
-    //     };
-    //     await setTimeoutPromise(5);
-    //     return new Response(`mock response ${i}`);
-    //   });
-    //
-    //   // addCacheInterceptors(ajax, {
-    //   //   useCache: true,
-    //   //   maxAge: 100,
-    //   // });
-    //
-    //   const request1 = ajax.fetch('/test').then(r => r.text());
-    //   // const request2 = ajax.fetch('/test').then(r => r.text());
-    //   clock.tick(100);
-    //
-    //   console.log(await request1);
-    // const request3 = ajax.fetch('/test').then(r => r.text());
-    //
-    // clock.tick(200);
-    //
-    // const firstResponses = await Promise.all([request1, request2, request3]);
-    //
-    // console.log(firstResponses);
+    it('caches concurrent requests', async () => {
+      /**
+       * @param {number | undefined} timeout
+       * @param {number} i
+       */
+      const returnResponseOnTick = (timeout, i) =>
+        new Promise(resolve =>
+          window.setTimeout(() => resolve(new Response(`mock response ${i}`)), timeout),
+        );
 
-    // const request4 = ajax.fetch('/test').then(r => r.text());
-    //
-    // clock.tick(400);
-    //
-    // const request5 = ajax.fetch('/test').then(r => r.text());
-    //
-    // clock.tick(1000);
-    //
-    // const responses = await Promise.all([request4, request5]);
-    //
-    // console.log(responses);
+      newCacheId();
 
-    // expect(fetchStub.callCount).to.equal(1);
+      const clock = sinon.useFakeTimers();
 
-    // expect(responseTexts).to.eql([
-    //   'mock response 1',
-    //   'mock response 1',
-    //   'mock response 1',
-    //   'mock response 1',
-    // ]);
-    // });
-    //
-    // it('preserves status and headers when returning cached response', async () => {
-    //   newCacheId();
-    //   fetchStub.returns(
-    //     Promise.resolve(
-    //       new Response('mock response', { status: 206, headers: { 'x-foo': 'x-bar' } }),
-    //     ),
-    //   );
-    //
-    //   addCacheInterceptors(ajax, {
-    //     useCache: true,
-    //     maxAge: 100,
-    //   });
-    //
-    //   const response1 = await ajax.fetch('/test');
-    //   const response2 = await ajax.fetch('/test');
-    //   expect(fetchStub.callCount).to.equal(1);
-    //   expect(response1.status).to.equal(206);
-    //   expect(response1.headers.get('x-foo')).to.equal('x-bar');
-    //   expect(response2.status).to.equal(206);
-    //   expect(response2.headers.get('x-foo')).to.equal('x-bar');
-    //
-    //
-    // });
+      fetchStub.onFirstCall().returns(returnResponseOnTick(900, 1));
+      fetchStub.onSecondCall().returns(returnResponseOnTick(1900, 2));
+
+      addCacheInterceptors(ajax, {
+        useCache: true,
+        maxAge: 750,
+      });
+
+      const firstRequest = ajax.fetch('/test').then(r => r.text());
+      const concurrentFirstRequest1 = ajax.fetch('/test').then(r => r.text());
+      const concurrentFirstRequest2 = ajax.fetch('/test').then(r => r.text());
+
+      clock.tick(1000);
+
+      // firstRequest is cached at tick 1000 in the next line!
+      const firstResponses = await Promise.all([
+        firstRequest,
+        concurrentFirstRequest1,
+        concurrentFirstRequest2,
+      ]);
+
+      expect(fetchStub.callCount).to.equal(1);
+
+      const cachedFirstRequest = ajax.fetch('/test').then(r => r.text());
+
+      clock.tick(500);
+
+      const cachedFirstResponse = await cachedFirstRequest;
+
+      expect(fetchStub.callCount).to.equal(1);
+
+      const secondRequest = ajax.fetch('/test').then(r => r.text());
+      const secondConcurrentRequest = ajax.fetch('/test').then(r => r.text());
+
+      clock.tick(1000);
+
+      const secondResponses = await Promise.all([secondRequest, secondConcurrentRequest]);
+
+      expect(firstResponses).to.eql(['mock response 1', 'mock response 1', 'mock response 1']);
+
+      expect(cachedFirstResponse).to.equal('mock response 1');
+
+      expect(secondResponses).to.eql(['mock response 2', 'mock response 2']);
+    });
+
+    it('preserves status and headers when returning cached response', async () => {
+      newCacheId();
+      fetchStub.returns(
+        Promise.resolve(
+          new Response('mock response', { status: 206, headers: { 'x-foo': 'x-bar' } }),
+        ),
+      );
+
+      addCacheInterceptors(ajax, {
+        useCache: true,
+        maxAge: 100,
+      });
+
+      const response1 = await ajax.fetch('/test');
+      const response2 = await ajax.fetch('/test');
+      expect(fetchStub.callCount).to.equal(1);
+      expect(response1.status).to.equal(206);
+      expect(response1.headers.get('x-foo')).to.equal('x-bar');
+      expect(response2.status).to.equal(206);
+      expect(response2.headers.get('x-foo')).to.equal('x-bar');
+    });
   });
 });
