@@ -2,13 +2,22 @@ import { expect } from '@open-wc/testing';
 import * as sinon from 'sinon';
 import '../../src/typedef.js';
 import { Ajax } from '../../index.js';
-import { extendCacheOptions } from '../../src/cacheManager.js';
+import { extendCacheOptions, resetCacheSession, ajaxCache } from '../../src/cacheManager.js';
 import { createCacheInterceptors } from '../../src/interceptors/cacheInterceptors.js';
 
 /** @type {Ajax} */
 let ajax;
 
 describe('cache interceptors', () => {
+  /**
+   * @param {number | undefined} timeout
+   * @param {number} i
+   */
+  const returnResponseOnTick = (timeout, i) =>
+    new Promise(resolve =>
+      window.setTimeout(() => resolve(new Response(`mock response ${i}`)), timeout),
+    );
+
   /** @type {number | undefined} */
   let cacheId;
   /** @type {sinon.SinonStub} */
@@ -484,15 +493,6 @@ describe('cache interceptors', () => {
     });
 
     it('caches concurrent requests', async () => {
-      /**
-       * @param {number | undefined} timeout
-       * @param {number} i
-       */
-      const returnResponseOnTick = (timeout, i) =>
-        new Promise(resolve =>
-          window.setTimeout(() => resolve(new Response(`mock response ${i}`)), timeout),
-        );
-
       newCacheId();
 
       const clock = sinon.useFakeTimers();
@@ -535,11 +535,39 @@ describe('cache interceptors', () => {
 
       const secondResponses = await Promise.all([secondRequest, secondConcurrentRequest]);
 
+      expect(fetchStub.callCount).to.equal(2);
+
       expect(firstResponses).to.eql(['mock response 1', 'mock response 1', 'mock response 1']);
 
       expect(cachedFirstResponse).to.equal('mock response 1');
 
       expect(secondResponses).to.eql(['mock response 2', 'mock response 2']);
+    });
+
+    it('discards responses that are requested in a different cache session', async () => {
+      newCacheId();
+
+      addCacheInterceptors(ajax, {
+        useCache: true,
+        maxAge: 10000,
+      });
+
+      // Switch the cache after the cache request interceptor, but before the fetch
+      // @ts-ignore
+      ajax._requestInterceptors.push(async request => {
+        newCacheId();
+        resetCacheSession(getCacheIdentifier());
+        return request;
+      });
+
+      const firstRequest = ajax.fetch('/test').then(r => r.text());
+
+      const firstResponse = await firstRequest;
+
+      expect(firstResponse).to.equal('mock response');
+      // @ts-ignore
+      expect(ajaxCache._cachedRequests).to.deep.equal({});
+      expect(fetchStub.callCount).to.equal(1);
     });
 
     it('preserves status and headers when returning cached response', async () => {

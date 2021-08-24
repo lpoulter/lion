@@ -8,6 +8,7 @@ import {
   extendCacheOptions,
   validateCacheOptions,
   invalidateMatchingCache,
+  isCurrentSessionId,
 } from '../src/cacheManager.js';
 import Cache from '../src/Cache.js';
 import PendingRequestStore from '../src/PendingRequestStore.js';
@@ -293,6 +294,20 @@ describe('cacheManager', () => {
 
       expect(ajaxCache.deleteMatching.calledWith('f00')).to.be.true;
       expect(pendingRequestStore.resolveMatching.calledWith('f00')).to.be.true;
+    });
+  });
+
+  describe('isCurrentSessionId', () => {
+    it('returns true for the current session id', () => {
+      resetCacheSession('the-id');
+
+      expect(isCurrentSessionId('the-id')).to.equal(true);
+    });
+
+    it('returns true for the current session id', () => {
+      resetCacheSession('the-id');
+
+      expect(isCurrentSessionId('a-different-id')).to.equal(false);
     });
   });
 });

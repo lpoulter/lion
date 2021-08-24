@@ -53,7 +53,7 @@ export interface ValidatedCacheOptions extends CacheOptions {
 }
 
 export interface CacheRequestExtension {
-  requestCache?: any; // TODO: type this
+  cacheSessionId?: string;
   cacheOptions?: CacheOptions;
   adapter: any;
   status: number;
@@ -62,7 +62,7 @@ export interface CacheRequestExtension {
 }
 
 export interface CacheResponseRequest {
-  requestCache?: any; // TODO: type this
+  cacheSessionId?: string;
   cacheOptions?: CacheOptions;
   method: string;
 }

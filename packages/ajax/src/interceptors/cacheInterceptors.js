@@ -7,6 +7,7 @@ import {
   validateCacheOptions,
   invalidateMatchingCache,
   pendingRequestStore,
+  isCurrentSessionId,
 } from '../cacheManager.js';
 
 /**
@@ -20,15 +21,17 @@ const createCacheRequestInterceptor = (
   globalCacheOptions,
 ) => /** @param {CacheRequest} request */ async request => {
   validateCacheOptions(request.cacheOptions);
-  resetCacheSession(getCacheId()); // cacheId is used to bind the cache to the current session
+  const cacheSessionId = getCacheId();
+  resetCacheSession(cacheSessionId); // cacheSessionId is used to bind the cache to the current session
 
   const cacheOptions = extendCacheOptions({
     ...globalCacheOptions,
     ...request.cacheOptions,
   });
 
-  // store cacheOptions in the request, to use it in the response interceptor.
+  // store cacheOptions and cacheSessionId in the request, to use it in the response interceptor.
   request.cacheOptions = cacheOptions;
+  request.cacheSessionId = cacheSessionId;
 
   if (!cacheOptions.useCache) {
     return request;
@@ -73,9 +76,10 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
   if (!response.request) {
     throw new Error('Missing request in response');
   }
+
   const cacheOptions = extendCacheOptions({
     ...globalCacheOptions,
-    ...response.request?.cacheOptions,
+    ...response.request.cacheOptions,
   });
 
   const requestId = cacheOptions.requestIdFunction(response.request);
@@ -84,8 +88,12 @@ const createCacheResponseInterceptor = globalCacheOptions => /** @param {CacheRe
   const isMethodSupported = cacheOptions.methods.includes(response.request?.method.toLowerCase());
 
   if (!isAlreadyFromCache && isCacheActive && isMethodSupported) {
-    // Cache the response and mark the pending request as resolved
-    ajaxCache.set(requestId, response.clone());
+    if (isCurrentSessionId(response.request.cacheSessionId)) {
+      // Cache the response
+      ajaxCache.set(requestId, response.clone());
+    }
+
+    // Mark the pending request as resolved
     pendingRequestStore.resolve(requestId);
   }
   return response;

@@ -21,6 +21,13 @@ export const ajaxCache = new Cache();
 export const pendingRequestStore = new PendingRequestStore();
 
 /**
+ * Checks whether the given cacheSessionId matches the currently active id.
+ *
+ * @param {string|undefined} cacheId The cache id to check
+ */
+export const isCurrentSessionId = cacheId => cacheId === cacheSessionId;
+
+/**
  * Resets the cache session when the cacheId changes.
  *
  * There can be only 1 active session at all times.
@@ -30,7 +37,7 @@ export const resetCacheSession = cacheId => {
   if (!cacheId) {
     throw new Error('Invalid cache identifier');
   }
-  if (cacheId !== cacheSessionId) {
+  if (!isCurrentSessionId(cacheId)) {
     cacheSessionId = cacheId;
     ajaxCache.reset();
     pendingRequestStore.reset();
